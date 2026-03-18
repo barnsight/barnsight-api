@@ -1,79 +1,92 @@
 <div align="center">
 
-<img src="./images/logo.png" width="450" alt="fastapi-nosql logo">
+<img src="./images/logo.png" width="450" alt="BarnSight API logo">
 
-# ⚡ FastAPI NoSQL Template
-**The high-performance, minimalist backbone for NoSQL-native applications.**
+# 🐄 BarnSight API
+**The robust event ingestion and analytics backbone for BarnSight Edge devices.**
 
-[![Coverage](https://img.shields.io/badge/coverage-100%25-00D100?style=for-the-badge&logo=pytest)](https://github.com/th0truth/fastapi-nosql-template)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-00D100?style=for-the-badge&logo=pytest)](https://github.com/BarnSight/barnsight-api)
 [![Python](https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 
-[**Features**](#-features) • [**Speedrun**](#-speedrun) • [**The Stack**](#-the-stack) • [**GraphQL**](#-graphql-playground) • [**Contributing**](CONTRIBUTING.md)
+[**Features**](#-features) • [**Farmer Workflow**](#-farmer-workflow) • [**Edge Integration**](#-edge-integration) • [**The Stack**](#-the-stack) • [**Contributing**](CONTRIBUTING.md)
 
 </div>
 
 ---
 
 ## 🌪️ Philosophy
-Most templates are bloated. **FastAPI-NoSQL** is built for developers who care about the metal. It’s focused, strictly type-safe, and asynchronous from the ground up. Zero ORM overhead, just raw NoSQL power and clean abstractions. 
+BarnSight API is built for the harsh, low-connectivity environment of modern farming. It provides a high-performance, asynchronous bridge between **Edge AI devices** (detecting animal excrement in real-time) and **Farmer Dashboards** (providing data-driven hygiene insights).
 
-> "If it's not async, it's not ready for the future."
+> "Turning routine hygiene checks into fast, reliable, data-driven workflows."
 
 ---
 
 ## 🚀 Features
 
-### **🔥 Core Engine**
-*   **Fully Async**: Non-blocking I/O across FastAPI, Motor (MongoDB), and Redis.
-*   **Pydantic v2**: Lightning-fast data validation and serialization.
-*   **Versioned APIs**: Native support for `/v1` and `/v2` routing out of the box.
-*   **Hybrid Power**: Simultaneous support for **REST** and **GraphQL (Strawberry)**.
+### **⚡ Edge-First Ingestion**
+*   **Dual-Auth Architecture**: Supports **API Keys** for Edge-to-Server ingestion and **JWT** for Web-to-Server interactions.
+*   **High Throughput**: Optimized MongoDB persistence for rapid bursts of detection events from multiple cameras.
+*   **Data Integrity**: Strict Pydantic v2 validation for timestamps, confidence scores, and bounding box coordinates.
 
-### **🛡️ Security & Auth**
-*   **Asymmetric JWT**: RS256 token signing with statically generated RSA keypairs.
-*   **Scoped RBAC**: Fine-grained permissions (Admin, Seller, Customer).
-*   **Rate Limiting**: Dynamic, Redis-backed protection via SlowAPI.
+### **🛡️ Security & Account Isolation**
+*   **Account Scoping**: Every event and API key is strictly isolated by `account_id`, ensuring privacy between different farms.
+*   **Secure API Keys**: Farmer-generated keys are SHA-256 hashed in the database.
+*   **RBAC**: Fine-grained permissions for **Admins** (Farmers), **Users** (Staff/Coworkers), and **Edge** (Hardware).
 
-### **💾 Data & Management**
-*   **Atlas Ready**: Intelligent URI construction for local or MongoDB Atlas (SRV).
-*   **Admin Dashboard**: Real-time analytics for users, products, and categories.
-*   **Role Migration**: Native logic to migrate users between roles and collections.
-
-### **🛠️ Ops & Observability**
-*   **Prometheus Ready**: Built-in `/metrics` endpoint and structured JSON logging.
-*   **100% Coverage**: Exhuastive test suite with full MongoDB and Redis mocking.
-*   **Nginx Gateway**: Production-ready container orchestration.
+### **📊 Analytics & Management**
+*   **Real-time Aggregation**: Aggregated insights on detections per camera, device statistics, and hygiene trends.
+*   **Admin Dashboard**: Overview of connected edge devices, active users, and total ingestion volume.
+*   **Rate Limiting**: Tiered protection (Edge: 1000/min, User: 300/min) backed by Redis.
 
 ---
 
 ## 🕹️ Speedrun
 
 ```bash
-# 1. Clone the power
-git clone https://github.com/th0truth/fastapi-nosql-template.git && cd fastapi-nosql-template
+# 1. Clone the repository
+git clone https://github.com/BarnSight/barnsight-api.git && cd barnsight-api
 
-# 2. Inject environment
+# 2. Setup environment
 cp .env.example .env
 
-# 3. Generate RSA keys for JWT
-# Generate the keys locally:
+# 3. Generate RSA keys for JWT Authentication
 openssl genrsa -out private_key.pem 2048
 openssl rsa -in private_key.pem -pubout -out public_key.pem
-# Then format them for .env (replace newlines with \n and wrap in quotes)
-# Add them to .env as PRIVATE_KEY_PEM="..." and PUBLIC_KEY_PEM="..."
+# Add formatted keys to .env as PRIVATE_KEY_PEM and PUBLIC_KEY_PEM
 
-# 4. Ignite
+# 4. Launch Stack
 docker compose up --build
 ```
+The API will be available at `http://localhost:8000`.
 
-### ⌨️ Local Workflow
-| Command | Action |
-| :--- | :--- |
-| `bash scripts/build.sh` | Build optimized Docker images |
-| `bash scripts/run.sh` | Launch the full stack |
-| `bash scripts/clean.sh` | Wipe containers, networks, and volumes |
+---
+
+## 👨‍🌾 Farmer Workflow
+
+1.  **Create Account**: Register and log in via the Web Dashboard.
+2.  **Generate API Key**: Navigate to `/api-keys` to create a new key for your barn's hardware.
+3.  **Deploy Edge**: Insert the generated `bs_...` key into your **BarnSight Edge** configuration.
+4.  **Monitor**: View real-time manure detections and analytics reports.
+
+---
+
+## 📷 Edge Integration
+
+Edge devices (`barnsight-edge`) push data via HTTPS:
+
+*   **Endpoint**: `POST /api/v1/events`
+*   **Auth Header**: `X-API-Key: bs_your_key_here`
+*   **Payload**:
+```json
+{
+  "timestamp": "2026-03-18T12:34:56Z",
+  "camera_id": "barn_01_cam_A",
+  "confidence": 0.92,
+  "bounding_box": {"x": 150, "y": 300, "width": 100, "height": 80}
+}
+```
 
 ---
 
@@ -81,39 +94,21 @@ docker compose up --build
 
 | Layer | Technology |
 | :--- | :--- |
-| **Logic** | FastAPI + Python 3.11+ |
-| **Persistence** | MongoDB + Motor (Async) |
-| **Cache / Limit** | Redis + aioredis |
-| **GraphQL** | Strawberry GraphQL |
-| **Metrics** | Prometheus |
+| **API Framework** | FastAPI + Python 3.11+ |
+| **Database** | MongoDB + Motor (Async) |
+| **Cache / Rate Limit** | Redis + aioredis |
+| **Auth** | Asymmetric JWT (RS256) + Hashed API Keys |
 | **Gateway** | Nginx |
 
 ---
 
-## 🧬 GraphQL Playground
-Fetch users and products in a single high-speed request at `/graphql`.
-
-```graphql
-query {
-  user(username: "admin") {
-    username
-    email
-    role
-  }
-  products(category: "electronics") {
-    title
-    brand
-    price
-  }
-}
-```
 ## 📄 License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the GPL-3.0 License. See the LICENSE file for details.
 
 <div align="center">
 
-**Built for developers who ship fast.**  
-⭐ **Star this repo if it helps your next project!**
+**Built for the future of farming.**  
+⭐ **Star this repo if it helps your barn!**
 
 </div>
