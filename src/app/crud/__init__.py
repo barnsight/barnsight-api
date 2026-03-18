@@ -1,9 +1,9 @@
 __all__ = [
   "BaseCRUD",
   "UserCRUD",
-  "ProductCRUD"
+  "EventCRUD"
 ]
 
 from .base_crud import BaseCRUD
 from .user_crud import UserCRUD
-from .product_crud import ProductCRUD
+from .event_crud import EventCRUD

@@ -50,16 +50,16 @@ async def admin_dashboard(
   Returns administrative dashboard overview.
   """
   users_db = mongo.get_database("users")
-  products_db = mongo.get_database("products")
+  barnsight_db = mongo.get_database("barnsight")
 
   stats = {
     "users": {
       "admins": await users_db["admins"].count_documents({}),
-      "sellers": await users_db["sellers"].count_documents({}),
-      "customers": await users_db["customers"].count_documents({}),
+      "users": await users_db["users"].count_documents({}),
+      "edge_devices": await users_db["edge"].count_documents({}),
     },
-    "products": {
-      "categories": len(await products_db.list_collection_names()),
+    "events": {
+      "total": await barnsight_db["events"].count_documents({}),
     }
   }
   
@@ -93,10 +93,10 @@ async def change_user_role(
   # Set default scopes based on role
   if new_role == "admins":
     user["scopes"] = ["admin"]
-  elif new_role == "sellers":
-    user["scopes"] = ["seller"]
+  elif new_role == "edge":
+    user["scopes"] = ["edge"]
   else:
-    user["scopes"] = ["customer"]
+    user["scopes"] = ["user"]
 
   # Migrate document
   async with await mongo._client.start_session() as session:

@@ -51,7 +51,6 @@ class Settings(BaseSettings):
 
   # Versions
   API_V1_STR: str = "/api/v1"
-  API_V2_STR: str = "/api/v2"
 
   # MongoDB settings    
   MONGO_HOSTNAME: str = "localhost"
@@ -90,8 +89,8 @@ class Settings(BaseSettings):
   
   # Rate limits
   RATE_LIMIT_ANONYMOUS: str = "100/minute"
-  RATE_LIMIT_SELLER: str = "500/minute"
-  RATE_LIMIT_CUSTOMER: str = "200/minute"
+  RATE_LIMIT_EDGE: str = "1000/minute"
+  RATE_LIMIT_USER: str = "300/minute"
 
   # Google settings (OAuth)
   GOOGLE_CLIENT_ID: Optional[str] = None
@@ -106,8 +105,8 @@ class Settings(BaseSettings):
   def RATE_LIMITS(self) -> Dict[str, str]:
     return {
       "anonymous": self.RATE_LIMIT_ANONYMOUS,
-      "sellers": self.RATE_LIMIT_SELLER,
-      "customers": self.RATE_LIMIT_ANONYMOUS
+      "edge": self.RATE_LIMIT_EDGE,
+      "user": self.RATE_LIMIT_USER
     }
 
 

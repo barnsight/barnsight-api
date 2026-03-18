@@ -99,33 +99,33 @@ def authorized_client(client):
     "username": "admin",
     "email": "admin@example.com",
     "role": "admins",
-    "scopes": ["admin", "seller", "customer"]
+    "scopes": ["admin", "edge", "user"]
   }
   app.dependency_overrides[get_current_user] = lambda: user_data
   return client
 
 
 @pytest.fixture
-def seller_client(client):
-  """Client with mocked seller user."""
+def edge_client(client):
+  """Client with mocked edge user."""
   user_data = {
-    "username": "seller",
-    "email": "seller@example.com",
-    "role": "sellers",
-    "scopes": ["seller"]
+    "username": "edge",
+    "email": "edge@example.com",
+    "role": "edge",
+    "scopes": ["edge"]
   }
   app.dependency_overrides[get_current_user] = lambda: user_data
   return client
 
 
 @pytest.fixture
-def customer_client(client):
-  """Client with mocked customer user."""
+def user_client(client):
+  """Client with mocked user."""
   user_data = {
-    "username": "customer",
-    "email": "customer@example.com",
-    "role": "customers",
-    "scopes": ["customer"]
+    "username": "user",
+    "email": "user@example.com",
+    "role": "user",
+    "scopes": ["user"]
   }
   app.dependency_overrides[get_current_user] = lambda: user_data
   return client
