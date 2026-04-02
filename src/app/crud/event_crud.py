@@ -58,13 +58,15 @@ class EventCRUD(BaseCRUD):
     camera_pipeline = [
       {"$group": {"_id": "$camera_id", "count": {"$sum": 1}}}
     ]
-    camera_stats = await self.db[self.collection_name].aggregate(camera_pipeline).to_list(length=None)
+    camera_cursor = await self.db[self.collection_name].aggregate(camera_pipeline)
+    camera_stats = await camera_cursor.to_list(length=None)
     detections_by_camera = {stat["_id"]: stat["count"] for stat in camera_stats if stat["_id"]}
 
     device_pipeline = [
       {"$group": {"_id": "$device_id", "count": {"$sum": 1}}}
     ]
-    device_stats = await self.db[self.collection_name].aggregate(device_pipeline).to_list(length=None)
+    device_cursor = await self.db[self.collection_name].aggregate(device_pipeline)
+    device_stats = await device_cursor.to_list(length=None)
     detections_by_device = {stat["_id"]: stat["count"] for stat in device_stats if stat["_id"]}
 
     return {
