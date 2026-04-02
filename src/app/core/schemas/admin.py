@@ -1,7 +1,10 @@
-from .user import UserPrivate
+"""Admin user schema for initial account creation."""
 
-class AdminBase(UserPrivate):
+from typing import List
+from .user import UserBase
+
+
+class AdminCreate(UserBase):
+  """Schema for creating an admin account."""
   role: str = "admins"
-  scopes: list = [
-    "admin"
-  ]
+  scopes: List[str] = ["admin"]

@@ -1,58 +1,55 @@
-from typing import Annotated, Dict
-from fastapi import (
-  APIRouter,
-  HTTPException,
-  status,
-  Security,
-  Depends,
-  Body
-)
+"""Admin management routes.
+
+Handles initial admin setup, dashboard stats, and user role changes.
+All endpoints require admin scope.
+"""
+
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, status, Security, Depends, Body
+
 from core.database import MongoClient
-from core.schemas.admin import AdminBase
-from api.dependencies import (
-  get_mongo_client,
-  get_current_user
-)
-from api.dependencies import limit_dependency
+from core.schemas.admin import AdminCreate
+from api.dependencies import get_mongo_client, get_current_user, limit_dependency
 from crud import UserCRUD
 
 router = APIRouter(tags=["Admin"])
 
 
-@router.post("/setup",
+@router.post(
+  "/setup",
   status_code=status.HTTP_201_CREATED,
-  dependencies=[Depends(limit_dependency)])
+  dependencies=[Depends(limit_dependency)],
+)
 async def create_admin_account(
-  admin: Annotated[AdminBase, Body()],
+  admin: Annotated[AdminCreate, Body()],
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
-  """
-  Creates an initial admin account.
-  """
+  """Create the initial admin account. One-time setup endpoint."""
   users_db = mongo.get_database("users")
   if await UserCRUD(users_db).find(username=admin.username):
     raise HTTPException(
       status_code=status.HTTP_409_CONFLICT,
-      detail="Admin already exists."
+      detail="Admin already exists.",
     )
-  
+
   await UserCRUD(users_db).create(admin)
   return {"message": "Admin account created successfully."}
 
 
-@router.get("/dashboard",
+@router.get(
+  "/dashboard",
   status_code=status.HTTP_200_OK,
-  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)])
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
 async def admin_dashboard(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
-  """
-  Returns administrative dashboard overview.
-  """
+  """Return system-wide statistics for the admin dashboard."""
   users_db = mongo.get_database("users")
   barnsight_db = mongo.get_database("barnsight")
 
-  stats = {
+  return {
     "users": {
       "admins": await users_db["admins"].count_documents({}),
       "users": await users_db["users"].count_documents({}),
@@ -60,37 +57,33 @@ async def admin_dashboard(
     },
     "events": {
       "total": await barnsight_db["events"].count_documents({}),
-    }
+    },
   }
-  
-  return stats
 
 
-@router.patch("/users/{username}/role",
+@router.patch(
+  "/users/{username}/role",
   status_code=status.HTTP_200_OK,
-  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)])
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
 async def change_user_role(
   username: str,
   new_role: Annotated[str, Body(embed=True)],
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
-  """
-  Changes a user's role and migrates them between collections.
-  """
+  """Change a user's role and migrate their document between collections."""
   users_db = mongo.get_database("users")
   user_crud = UserCRUD(users_db)
-  
-  if not (user := await user_crud.find(username=username)):
+
+  user = await user_crud.find(username=username)
+  if not user:
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
+
   old_role = user.get("role")
   if old_role == new_role:
     return {"message": f"User is already a {new_role}"}
-    
-  # Update role in document
+
   user["role"] = new_role
-  
-  # Set default scopes based on role
   if new_role == "admins":
     user["scopes"] = ["admin"]
   elif new_role == "edge":
@@ -98,10 +91,10 @@ async def change_user_role(
   else:
     user["scopes"] = ["user"]
 
-  # Migrate document
+  # Atomic migration: insert into new collection, delete from old
   async with await mongo._client.start_session() as session:
     async with session.start_transaction():
-      await users_db[new_role].insert_one(user)
-      await users_db[old_role].delete_one({"username": username})
-      
+      await users_db[new_role].insert_one(user, session=session)
+      await users_db[old_role].delete_one({"username": username}, session=session)
+
   return {"message": f"User {username} role updated from {old_role} to {new_role}"}

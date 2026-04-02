@@ -1,26 +1,33 @@
-from prometheus_fastapi_instrumentator import Instrumentator
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-import itsdangerous
+"""BarnSight API — FastAPI application factory.
 
-# Rate Limiting Dependencies
+Sets up middleware, routers, database connections, and monitoring.
+"""
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+
+from prometheus_fastapi_instrumentator import Instrumentator
+
 from slowapi.errors import RateLimitExceeded
-from core.middleware import RateLimitMiddleware 
-from core.errors import rate_limit_exceeded_handler
 
 from core.config import settings
 from core.database import MongoClient, RedisClient
+from core.middleware import RateLimitMiddleware
+from core.errors import rate_limit_exceeded_handler
 from api.dependencies import limiter
 from api.api import api_main_router
+from core.services.cloudinary_service import init_cloudinary
 
 
-# Initialize lifespan events
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+  """Manage application startup and shutdown lifecycle."""
   await RedisClient.connect()
   await MongoClient.connect()
+  init_cloudinary()
   try:
     yield
   finally:
@@ -29,61 +36,60 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-  # Initialize the app
+  """Create and configure the FastAPI application instance."""
   app = FastAPI(
     title=settings.NAME,
     description=settings.DESCRIPTION,
     summary=settings.SUMMARY,
     version=settings.VERSION,
     openapi_url="/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
   )
 
-  # Add middleware to the app
+  # Rate limiting middleware
   app.add_middleware(RateLimitMiddleware)
+
+  # Session middleware with configurable HTTPS enforcement
   app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
     session_cookie="session",
     same_site="lax",
-    https_only=False
+    https_only=False,  # Set True behind a reverse proxy with TLS
   )
 
-  # Attach limiter to the app
+  # Attach rate limiter and error handler
   app.state.limiter = limiter
   app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
-
-  # Set all CORS enabled origins
+  # CORS middleware
   if settings.all_cors_origins:
-    # Add middlewares
     app.add_middleware(
       CORSMiddleware,
       allow_origins=settings.all_cors_origins,
       allow_credentials=True,
       allow_methods=["*"],
-      allow_headers=["*"]
+      allow_headers=["*"],
     )
 
-  # Monitor the app using Prometheus
+  # Prometheus metrics
   Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 
-  # Include main router to the app
+  # Include API routers
   app.include_router(api_main_router)
 
   return app
-  
 
-# Create the app instance at module level
+
 app = create_app()
 
 
 if __name__ == "__main__":
   import uvicorn
   uvicorn.run(
-    app="main:app",
+    app="app.main:app",
     host="0.0.0.0",
     port=8000,
     reload=True,
-    log_level="info"
+    log_level="info",
   )
