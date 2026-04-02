@@ -7,7 +7,7 @@ class ApiKeyCreate(BaseModel):
     expires_in_days: Optional[int] = Field(None, description="Optional expiration in days")
 
 class ApiKeyResponse(BaseModel):
-    key: str = Field(..., description="The actual API key (only shown once during creation)")
+    key: Optional[str] = Field(None, description="The actual API key (only shown once during creation)")
     name: str
     created_at: datetime
     id: str = Field(..., alias="_id")

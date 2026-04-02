@@ -1,8 +1,11 @@
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 from datetime import datetime
+from app.main import app
+from api.v1.routers.events import get_event_owner
 
 def test_create_event(client, mock_mongo_client):
+  app.dependency_overrides[get_event_owner] = lambda: "test_owner"
   mock_db = mock_mongo_client.get_database("events")
   
   event_data = {
@@ -27,6 +30,7 @@ def test_create_event(client, mock_mongo_client):
   assert "_id" in data
 
 def test_get_events(client, mock_mongo_client):
+  app.dependency_overrides[get_event_owner] = lambda: "test_owner"
   mock_db = mock_mongo_client.get_database("events")
   
   mock_events = [
@@ -40,6 +44,9 @@ def test_get_events(client, mock_mongo_client):
   ]
   
   mock_cursor = MagicMock()
+  mock_cursor.sort.return_value = mock_cursor
+  mock_cursor.skip.return_value = mock_cursor
+  mock_cursor.limit.return_value = mock_cursor
   mock_cursor.to_list = AsyncMock(return_value=mock_events)
   mock_db["events"].find.return_value = mock_cursor
   mock_db["events"].count_documents = AsyncMock(return_value=1)
@@ -63,7 +70,7 @@ def test_get_analytics(client, mock_mongo_client):
   
   mock_cursor = MagicMock()
   mock_cursor.to_list = AsyncMock(side_effect=[mock_camera_stats, mock_device_stats])
-  mock_db["events"].aggregate.return_value = mock_cursor
+  mock_db["events"].aggregate = AsyncMock(return_value=mock_cursor)
   
   response = client.get("/api/v1/analytics")
   

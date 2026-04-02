@@ -9,11 +9,15 @@ def test_create_admin_account(client, mock_mongo_client):
     "/api/v1/admin/setup",
     json={
       "username": "new_admin",
-      "password": "password123",
-      "role": "admins"
+      "password": "Password123!",
+      "role": "admins",
+      "first_name": "Admin",
+      "middle_name": "M",
+      "last_name": "User",
+      "account_date": "2026-03-18T12:34:56Z",
+      "email": "admin@example.com"
     }
-  )
-  
+  )  
   assert response.status_code == 201
   assert response.json() == {"message": "Admin account created successfully."}
 
