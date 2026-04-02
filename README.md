@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="./images/logo.png" width="450" alt="BarnSight API logo">
-
 # BarnSight API
 
 **The robust event ingestion and analytics backbone for BarnSight Edge devices.**
