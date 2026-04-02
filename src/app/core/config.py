@@ -1,58 +1,68 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+"""Application settings loaded from environment variables.
+
+Uses pydantic-settings for type-validated configuration
+with automatic .env file loading.
+"""
+
+import secrets
+from typing import Any, List, Optional, Dict, TypeVar
 
 from pydantic import BaseModel, AnyUrl, BeforeValidator, computed_field
-from typing import Any, TypeVar, Annotated, List, Dict, Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Define a generic type variable
-ModelType = TypeVar("TypeModel", bound=BaseModel)
+# Generic type variable for CRUD operations
+ModelType = TypeVar("ModelType", bound=BaseModel)
 
 
-# Parse middleware cors
-def parse_cors(v: Any) -> List[str] | str:
+def parse_cors(v: Any) -> List[str]:
+  """Parse CORS origins from comma-separated string or list.
+
+  Filters out comment lines (starting with #) and empty strings.
+  """
   if isinstance(v, str) and not v.startswith("["):
-    # Filter out comments (starting with #) and empty strings
     return [
-      item.strip() 
-      for item in v.split(",") 
+      item.strip()
+      for item in v.split(",")
       if item.strip() and not item.strip().startswith("#")
     ]
-  elif isinstance(v, list | str):
+  if isinstance(v, (list, str)):
     return v
   raise ValueError(v)
 
 
-class Settings(BaseSettings): 
+class Settings(BaseSettings):
+  """BarnSight API configuration."""
+
   model_config = SettingsConfigDict(
     env_file=".env",
     env_ignore_empty=True,
-    extra="ignore"
+    extra="ignore",
   )
-    
+
   # App settings
-  NAME: str = "FastAPI-NoSQL-Template"
-  DESCRIPTION: str = ""
-  SUMMARY: str = ""
-  VERSION: str = "0.0.1"
+  NAME: str = "BarnSight API"
+  DESCRIPTION: str = "Central ingestion and analytics server for BarnSight farm hygiene monitoring"
+  SUMMARY: str = "BarnSight API"
+  VERSION: str = "0.1.0"
 
   FRONTEND_HOST: str = "http://localhost:8000"
 
   BACKEND_CORS_ORIGINS: Annotated[
     List[AnyUrl] | str, BeforeValidator(parse_cors)
   ] = []
-  
 
   @computed_field  # type: ignore[prop-decorator]
   @property
   def all_cors_origins(self) -> List[str]:
+    """Return all allowed CORS origins including the frontend host."""
     return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
       self.FRONTEND_HOST
     ]
 
-
-  # Versions
+  # API version
   API_V1_STR: str = "/api/v1"
 
-  # MongoDB settings    
+  # MongoDB settings
   MONGO_HOSTNAME: str = "localhost"
   MONGO_PORT: int = 27017
   MONGO_USERNAME: str = "root"
@@ -64,51 +74,41 @@ class Settings(BaseSettings):
   MONGO_SERVER_SELECTION_TIMEOUT_MS: int = 10000
   MONGO_RETRY_WRITES: bool = True
 
-
   @computed_field  # type: ignore[prop-decorator]
   @property
   def MONGO_URI(self) -> str:
-    """Intelligently construct MongoDB URI."""
+    """Build MongoDB URI from settings, supporting both Atlas and local."""
     if ".mongodb.net" in self.MONGO_HOSTNAME:
-      # Atlas connection
       return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/{self.MONGO_DATABASE}"
-    else:
-      # Local/Standard connection
-      auth = f"{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@" if self.MONGO_USERNAME and self.MONGO_PASSWORD else ""
-      return f"mongodb://{auth}{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/{self.MONGO_DATABASE}"
-    
+    auth = f"{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@" if self.MONGO_USERNAME and self.MONGO_PASSWORD else ""
+    return f"mongodb://{auth}{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/{self.MONGO_DATABASE}"
 
   # Redis settings
   REDIS_HOST: str = "localhost"
   REDIS_PORT: int = 6379
   REDIS_USERNAME: str = ""
   REDIS_PASSWORD: str = ""
-  REDIS_DB: int = 0  
-  
+  REDIS_DB: int = 0
+
   CACHE_EXPIRE_MINUTES: int = 60
-  
+
   # Rate limits
   RATE_LIMIT_ANONYMOUS: str = "100/minute"
   RATE_LIMIT_EDGE: str = "1000/minute"
   RATE_LIMIT_USER: str = "300/minute"
 
-  # Google settings (OAuth)
+  # Google OAuth settings
   GOOGLE_CLIENT_ID: Optional[str] = None
   GOOGLE_CLIENT_SECRET: Optional[str] = None
   GOOGLE_FRONTEND_REDIRECT: Optional[str] = None
 
-  SECRET_KEY: str = "changeme"
+  # Cloudinary settings
+  CLOUDINARY_CLOUD_NAME: Optional[str] = None
+  CLOUDINARY_API_KEY: Optional[str] = None
+  CLOUDINARY_API_SECRET: Optional[str] = None
 
-
-  @computed_field  # type: ignore[prop-decorator]
-  @property
-  def RATE_LIMITS(self) -> Dict[str, str]:
-    return {
-      "anonymous": self.RATE_LIMIT_ANONYMOUS,
-      "edge": self.RATE_LIMIT_EDGE,
-      "user": self.RATE_LIMIT_USER
-    }
-
+  # Session secret — must be set in production
+  SECRET_KEY: str = secrets.token_urlsafe(32)
 
   # JWT settings
   JWT_ALGORITHM: str = "RS256"
@@ -117,10 +117,20 @@ class Settings(BaseSettings):
   PRIVATE_KEY_PEM: str
   PUBLIC_KEY_PEM: str
 
+  @computed_field  # type: ignore[prop-decorator]
+  @property
+  def RATE_LIMITS(self) -> Dict[str, str]:
+    """Return rate limits as a dict keyed by role."""
+    return {
+      "anonymous": self.RATE_LIMIT_ANONYMOUS,
+      "edge": self.RATE_LIMIT_EDGE,
+      "user": self.RATE_LIMIT_USER,
+    }
+
 
 settings = Settings()
 
-
+# Build Redis URI based on auth configuration
 if settings.REDIS_USERNAME or settings.REDIS_PASSWORD:
   REDIS_URI = f"redis://{settings.REDIS_USERNAME}:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
 else:

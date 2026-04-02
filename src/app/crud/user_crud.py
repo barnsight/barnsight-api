@@ -1,3 +1,9 @@
+"""User CRUD operations for MongoDB.
+
+Handles user lookup, creation, updates, deletion, and authentication.
+Uses a single 'users' collection with role-based document separation.
+"""
+
 from typing import Optional, List, Union
 
 from core.config import ModelType
@@ -7,61 +13,96 @@ from .base_crud import BaseCRUD
 
 
 class UserCRUD(BaseCRUD):
+  """CRUD operations for user documents across role-based collections."""
+
   def __init__(self, db):
     super().__init__(db)
 
-  async def find(self, *, username: str, exclude: Optional[List] = None) -> Union[dict, None]:
-    """Finds user profile using username."""
+  async def find(
+    self,
+    *,
+    username: Optional[str] = None,
+    email: Optional[str] = None,
+    exclude: Optional[List[str]] = None,
+  ) -> Union[dict, None]:
+    """Find a user by username or email.
+
+    Searches the specific collection based on the query type
+    rather than iterating all collections.
+    """
     try:
-      user = None
-      for collection in await self.db.list_collection_names():
-        if (user := await self.db[collection].find_one(
-          {"$or": [
-            {"username": {"$regex": username, "$options": "i"}},
-            {"email": {"$regex": username, "$options": "i"}},
-          ]}
-        )):
-          break
-      
-      if not user:
+      query = {}
+      if username:
+        query["username"] = {"$regex": username, "$options": "i"}
+      if email:
+        query["email.address" if "." not in email else "email"] = {
+          "$regex": email, "$options": "i"
+        }
+      if not query:
         return None
 
-      if exclude:
-        for key in exclude:
-          user.pop(key)
-      return user
+      # Search all role collections (users, admins, edge)
+      for collection in await self.db.list_collection_names():
+        user = await self.db[collection].find_one(query)
+        if user:
+          if exclude:
+            for key in exclude:
+              user.pop(key, None)
+          return user
+      return None
     except Exception as e:
-      logger.error({"message": "[x] An error occured while searching user profile in MongoDB.", "detail": str(e)}, exc_info=True)
-      return
+      logger.error(
+        {"message": "Error searching user in MongoDB", "detail": str(e)},
+        exc_info=True,
+      )
+      return None
 
   async def create(self, user: ModelType):
-    """Creates a user profile."""
+    """Create a new user with hashed password."""
     user.password = Hash.hash(plain=user.password)
     await self.db[user.role].insert_one(user.model_dump())
     return user
 
-  async def update(self, username: Union[str, int], update: dict) -> Union[dict, None]:
-    """Updates a user profile."""
-    if not (user := await self.find(username=username)):
-      return
-    return await self.db[user.get("role")].find_one_and_update(
-      filter=user,
-      update={"$set": update}
+  async def update(self, username: str, update: dict) -> Union[dict, None]:
+    """Update a user document by username.
+
+    Uses username as the filter (not the entire document) to avoid
+    race conditions where fields change between find and update.
+    """
+    user = await self.find(username=username)
+    if not user:
+      return None
+    role = user.get("role")
+    if not role:
+      return None
+    return await self.db[role].find_one_and_update(
+      filter={"username": username},
+      update={"$set": update},
     )
 
-  async def delete(self, username: Union[str, int]):
-    """Deletes a user profile."""
-    if not (user := await self.find(username=username)):
-      return
-    result = await self.db[user.get("role")].delete_one(user)
+  async def delete(self, username: str):
+    """Delete a user document by username."""
+    user = await self.find(username=username)
+    if not user:
+      return 0
+    role = user.get("role")
+    if not role:
+      return 0
+    result = await self.db[role].delete_one({"username": username})
     return result.deleted_count
 
-  async def authenticate(self, *, username: Union[str, int], plain_pwd: str, exclude: Optional[List] = None) -> Union[dict, None]:
-    """Authenticates a user using credentials."""
+  async def authenticate(
+    self,
+    *,
+    username: str,
+    plain_pwd: str,
+    exclude: Optional[List[str]] = None,
+  ) -> Union[dict, None]:
+    """Authenticate a user by verifying password hash."""
     user = await self.find(username=username)
     if not user or not Hash.verify(plain_pwd, user.get("password")):
-      return
+      return None
     if exclude:
       for key in exclude:
-        user.pop(key)
+        user.pop(key, None)
     return user
