@@ -97,7 +97,7 @@ async def get_current_user(
 
   # Fall back to MongoDB
   if user is None:
-    users_db = mongo.get_database("users")
+    users_db = mongo.get_database(settings.MONGO_DATABASE)
     user = await UserCRUD(users_db).find(username=username, exclude=["_id", "password"])
     if user is None:
       raise HTTPException(
@@ -107,7 +107,7 @@ async def get_current_user(
       )
     await redis.setex(
       redis_key,
-      timedelta(minutes=settings.CACHE_EXPIRE_MINUTES).seconds,
+      int(timedelta(minutes=settings.CACHE_EXPIRE_MINUTES).total_seconds()),
       json.dumps(user, default=str),
     )
 
@@ -140,10 +140,12 @@ def get_jwt_payload(request: Request) -> Optional[dict]:
 
 def _set_name_from_func(func):
   """Copy the original function's __name__ and __module__ to a wrapper."""
+
   def decorator(f):
     f.__name__ = func.__name__
     f.__module__ = func.__module__
     return f
+
   return decorator
 
 

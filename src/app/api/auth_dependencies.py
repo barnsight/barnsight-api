@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import Request, Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 
+from core.config import settings
 from core.database import MongoClient
 from crud.api_key_crud import ApiKeyCRUD
 
@@ -31,7 +32,7 @@ async def validate_api_key(
   if not MongoClient._client:
     await MongoClient.connect()
 
-  db = mongo.get_database("users")
+  db = mongo.get_database(settings.MONGO_DATABASE)
   api_key_crud = ApiKeyCRUD(db)
 
   key_doc = await api_key_crud.validate_key(api_key)

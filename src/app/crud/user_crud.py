@@ -33,11 +33,9 @@ class UserCRUD(BaseCRUD):
     try:
       query = {}
       if username:
-        query["username"] = {"$regex": username, "$options": "i"}
+        query["username"] = username
       if email:
-        query["email.address" if "." not in email else "email"] = {
-          "$regex": email, "$options": "i"
-        }
+        query["email"] = email
       if not query:
         return None
 

@@ -53,7 +53,7 @@ async def auth_google(
   except MismatchingStateError as e:
     logger.warning(
       {"message": "OAuth state mismatch (CSRF triggered)", "detail": str(e)},
-      exc_info=False,
+      exc_info=True,
     )
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
@@ -72,29 +72,60 @@ async def auth_google(
   user = token.get("userinfo")
   if not user:
     raise HTTPException(
-      status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-      detail="The server is temporarily unable to process the request.",
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Google did not return user information.",
     )
 
-  user_email = user["email"]
-  users_db = mongo.get_database("users")
+  user_email = user.get("email")
+  if not user_email:
+    raise HTTPException(
+      status_code=status.HTTP_400_BAD_REQUEST,
+      detail="Google account has no verified email.",
+    )
+
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
   user_doc = await UserCRUD(users_db).find(username=user_email)
   if not user_doc:
+    logger.info({"message": "OAuth login rejected — user not found", "email": user_email})
     raise HTTPException(
       status_code=status.HTTP_401_UNAUTHORIZED,
-      detail="Couldn't validate credentials",
+      detail="No account found for this email. Please register first.",
       headers={"WWW-Authenticate": "Bearer"},
     )
 
-  edbo_id, role, scopes = user_doc.get("edbo_id"), user_doc.get("role"), user_doc.get("scopes")
+  if not settings.GOOGLE_FRONTEND_REDIRECT:
+    raise HTTPException(
+      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+      detail="Google redirect URL not configured.",
+    )
 
-  jwt_data = OAuthJWTBearer.encode(payload={"sub": str(edbo_id), "role": role, "scopes": scopes})
+  if not settings.GOOGLE_FRONTEND_REDIRECT:
+    raise HTTPException(
+      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+      detail="Google redirect URL not configured.",
+    )
 
+  edbo_id = user_doc.get("edbo_id")
+  role = user_doc.get("role")
+  scopes = user_doc.get("scopes")
+
+  if not role:
+    raise HTTPException(
+      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+      detail="User document is missing required role field.",
+    )
+
+  jwt_data = OAuthJWTBearer.encode(payload={"sub": user_email, "role": role, "scopes": scopes})
+
+  cache_key = f"cache:user:{edbo_id}:profile" if edbo_id else f"cache:user:{user_email}:profile"
+  cache_ttl = int(timedelta(minutes=settings.CACHE_EXPIRE_MINUTES).total_seconds())
   await redis.setex(
-    f"cache:user:{edbo_id}:profile",
-    timedelta(minutes=settings.CACHE_EXPIRE_MINUTES).seconds,
+    cache_key,
+    cache_ttl,
     json.dumps(user_doc, default=str),
   )
+
+  logger.info({"message": "OAuth login successful", "email": user_email, "role": role})
 
   response = RedirectResponse(url=settings.GOOGLE_FRONTEND_REDIRECT)
   response.set_cookie(
@@ -102,13 +133,6 @@ async def auth_google(
     value=jwt_data["jwt"],
     httponly=True,
     secure=True,
-    samesite="lax",
-  )
-  response.set_cookie(
-    key="user_role",
-    value=role,
-    httponly=True,
-    secure=True,
-    samesite="lax",
+    samesite="strict",
   )
   return response
