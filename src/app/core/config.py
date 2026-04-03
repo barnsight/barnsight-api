@@ -61,7 +61,6 @@ class Settings(BaseSettings):
   MONGO_PORT: int = 27017
   MONGO_USERNAME: str = "root"
   MONGO_PASSWORD: str = "root"
-  MONGO_DATABASE: str = "nosql"
   MONGO_MAX_POOL_SIZE: int = 100
   MONGO_MIN_POOL_SIZE: int = 10
   MONGO_CONNECT_TIMEOUT_MS: int = 10000
@@ -73,13 +72,13 @@ class Settings(BaseSettings):
   def MONGO_URI(self) -> str:
     """Build MongoDB URI from settings, supporting both Atlas and local."""
     if ".mongodb.net" in self.MONGO_HOSTNAME:
-      return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/{self.MONGO_DATABASE}"
+      return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/nosql?authSource=admin"
     auth = (
       f"{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@"
       if self.MONGO_USERNAME and self.MONGO_PASSWORD
       else ""
     )
-    return f"mongodb://{auth}{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/{self.MONGO_DATABASE}"
+    return f"mongodb://{auth}{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/nosql"
 
   # Redis settings
   REDIS_HOST: str = "localhost"

@@ -83,7 +83,7 @@ async def auth_google(
       detail="Google account has no verified email.",
     )
 
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   user_doc = await UserCRUD(users_db).find(username=user_email)
   if not user_doc:
     logger.info({"message": "OAuth login rejected — user not found", "email": user_email})
@@ -91,12 +91,6 @@ async def auth_google(
       status_code=status.HTTP_401_UNAUTHORIZED,
       detail="No account found for this email. Please register first.",
       headers={"WWW-Authenticate": "Bearer"},
-    )
-
-  if not settings.GOOGLE_FRONTEND_REDIRECT:
-    raise HTTPException(
-      status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-      detail="Google redirect URL not configured.",
     )
 
   if not settings.GOOGLE_FRONTEND_REDIRECT:

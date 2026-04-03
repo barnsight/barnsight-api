@@ -97,7 +97,7 @@ async def get_current_user(
 
   # Fall back to MongoDB
   if user is None:
-    users_db = mongo.get_database(settings.MONGO_DATABASE)
+    users_db = mongo.get_database("users")
     user = await UserCRUD(users_db).find(username=username, exclude=["_id", "password"])
     if user is None:
       raise HTTPException(

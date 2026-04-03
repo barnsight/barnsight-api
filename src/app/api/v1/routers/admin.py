@@ -1,18 +1,18 @@
 """Admin management routes.
 
-Handles initial admin setup, dashboard stats, and user role changes.
-All endpoints require admin scope.
+Handles initial admin setup, dashboard stats, user role changes,
+and registration of farmer/staff accounts.
+All endpoints require admin scope except /setup.
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status, Security, Depends, Body
-
-from core.config import settings
+from api.dependencies import get_current_user, get_mongo_client, limit_dependency
 from core.database import MongoClient
 from core.schemas.admin import AdminCreate
-from api.dependencies import get_mongo_client, get_current_user, limit_dependency
+from core.schemas.registration import FarmerCreate, StaffCreate
 from crud import UserCRUD
+from fastapi import APIRouter, Body, Depends, HTTPException, Security, status
 
 router = APIRouter(tags=["Admin"])
 
@@ -27,7 +27,7 @@ async def create_admin_account(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Create the initial admin account. One-time setup endpoint."""
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   if await UserCRUD(users_db).find(username=admin.username):
     raise HTTPException(
       status_code=status.HTTP_409_CONFLICT,
@@ -36,6 +36,48 @@ async def create_admin_account(
 
   await UserCRUD(users_db).create(admin)
   return {"message": "Admin account created successfully."}
+
+
+@router.post(
+  "/register/farmer",
+  status_code=status.HTTP_201_CREATED,
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
+async def register_farmer(
+  farmer: Annotated[FarmerCreate, Body()],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Register a new farmer account. Admin only."""
+  users_db = mongo.get_database("users")
+  if await UserCRUD(users_db).find(username=farmer.username):
+    raise HTTPException(
+      status_code=status.HTTP_409_CONFLICT,
+      detail="Username already exists.",
+    )
+
+  await UserCRUD(users_db).create(farmer)
+  return {"message": "Farmer account created successfully."}
+
+
+@router.post(
+  "/register/staff",
+  status_code=status.HTTP_201_CREATED,
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
+async def register_staff(
+  staff: Annotated[StaffCreate, Body()],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Register a new staff account. Admin only."""
+  users_db = mongo.get_database("users")
+  if await UserCRUD(users_db).find(username=staff.username):
+    raise HTTPException(
+      status_code=status.HTTP_409_CONFLICT,
+      detail="Username already exists.",
+    )
+
+  await UserCRUD(users_db).create(staff)
+  return {"message": "Staff account created successfully."}
 
 
 @router.get(
@@ -47,13 +89,14 @@ async def admin_dashboard(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Return system-wide statistics for the admin dashboard."""
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   barnsight_db = mongo.get_database("barnsight")
 
   return {
     "users": {
       "admins": await users_db["admins"].count_documents({}),
-      "users": await users_db["users"].count_documents({}),
+      "farmers": await users_db["farmers"].count_documents({}),
+      "staff": await users_db["staff"].count_documents({}),
       "edge_devices": await users_db["edge"].count_documents({}),
     },
     "events": {
@@ -73,7 +116,7 @@ async def change_user_role(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Change a user's role and migrate their document between collections."""
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   user_crud = UserCRUD(users_db)
 
   user = await user_crud.find(username=username)
@@ -87,10 +130,14 @@ async def change_user_role(
   user["role"] = new_role
   if new_role == "admins":
     user["scopes"] = ["admin"]
+  elif new_role == "farmers":
+    user["scopes"] = ["farmer"]
+  elif new_role == "staff":
+    user["scopes"] = ["staff"]
   elif new_role == "edge":
     user["scopes"] = ["edge"]
   else:
-    user["scopes"] = ["user"]
+    user["scopes"] = ["staff"]
 
   # Atomic migration: insert into new collection, delete from old
   async with await mongo._client.start_session() as session:
