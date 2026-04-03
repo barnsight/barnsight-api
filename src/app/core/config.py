@@ -5,7 +5,7 @@ with automatic .env file loading.
 """
 
 import secrets
-from typing import Any, List, Optional, Dict, TypeVar
+from typing import Annotated, Any, List, Optional, Dict, TypeVar
 
 from pydantic import BaseModel, AnyUrl, BeforeValidator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,9 +21,7 @@ def parse_cors(v: Any) -> List[str]:
   """
   if isinstance(v, str) and not v.startswith("["):
     return [
-      item.strip()
-      for item in v.split(",")
-      if item.strip() and not item.strip().startswith("#")
+      item.strip() for item in v.split(",") if item.strip() and not item.strip().startswith("#")
     ]
   if isinstance(v, (list, str)):
     return v
@@ -47,17 +45,13 @@ class Settings(BaseSettings):
 
   FRONTEND_HOST: str = "http://localhost:8000"
 
-  BACKEND_CORS_ORIGINS: Annotated[
-    List[AnyUrl] | str, BeforeValidator(parse_cors)
-  ] = []
+  BACKEND_CORS_ORIGINS: Annotated[List[AnyUrl] | str, BeforeValidator(parse_cors)] = []
 
   @computed_field  # type: ignore[prop-decorator]
   @property
   def all_cors_origins(self) -> List[str]:
     """Return all allowed CORS origins including the frontend host."""
-    return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [
-      self.FRONTEND_HOST
-    ]
+    return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS] + [self.FRONTEND_HOST]
 
   # API version
   API_V1_STR: str = "/api/v1"
@@ -80,7 +74,11 @@ class Settings(BaseSettings):
     """Build MongoDB URI from settings, supporting both Atlas and local."""
     if ".mongodb.net" in self.MONGO_HOSTNAME:
       return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/{self.MONGO_DATABASE}"
-    auth = f"{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@" if self.MONGO_USERNAME and self.MONGO_PASSWORD else ""
+    auth = (
+      f"{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@"
+      if self.MONGO_USERNAME and self.MONGO_PASSWORD
+      else ""
+    )
     return f"mongodb://{auth}{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/{self.MONGO_DATABASE}"
 
   # Redis settings

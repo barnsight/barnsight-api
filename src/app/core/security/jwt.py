@@ -25,13 +25,17 @@ class OAuthJWTBearer:
     Returns the encoded JWT string and the jti for blacklist tracking.
     """
     jti = uuid.uuid4().hex
-    payload.update({
-      "jti": jti,
-      "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
-      "iat": datetime.now(tz=timezone.utc),
-    })
+    payload.update(
+      {
+        "jti": jti,
+        "exp": datetime.now(tz=timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+        "iat": datetime.now(tz=timezone.utc),
+      }
+    )
     return {
-      "jwt": jwt.encode(payload=payload, key=settings.PRIVATE_KEY_PEM, algorithm=settings.JWT_ALGORITHM),
+      "jwt": jwt.encode(
+        payload=payload, key=settings.PRIVATE_KEY_PEM, algorithm=settings.JWT_ALGORITHM
+      ),
       "jti": jti,
     }
 
@@ -41,7 +45,7 @@ class OAuthJWTBearer:
     try:
       return jwt.decode(jwt=token, key=settings.PUBLIC_KEY_PEM, algorithms=[settings.JWT_ALGORITHM])
     except (jwt.DecodeError, jwt.ExpiredSignatureError, jwt.InvalidTokenError) as e:
-      logger.warning({"message": "JWT decode failed", "detail": str(e)})
+      logger.debug({"message": "JWT decode failed", "detail": str(e)})
       return None
 
   @staticmethod
@@ -49,7 +53,9 @@ class OAuthJWTBearer:
     """Re-encode a payload with a fresh expiry and new jti."""
     payload["jti"] = uuid.uuid4().hex
     payload["exp"] = datetime.now(tz=timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
-    return jwt.encode(payload=payload, key=settings.PRIVATE_KEY_PEM, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+      payload=payload, key=settings.PRIVATE_KEY_PEM, algorithm=settings.JWT_ALGORITHM
+    )
 
   @staticmethod
   async def add_jti_to_blacklist(redis: RedisClient, *, jti: str, exp: int) -> bool:
@@ -65,4 +71,5 @@ class OAuthJWTBearer:
   @staticmethod
   async def is_jti_in_blacklist(redis: RedisClient, *, jti: str) -> bool:
     """Check if a token jti has been revoked."""
-    return await redis.exists(f"session:blacklist:jti:{jti}")
+    result = await redis.exists(f"session:blacklist:jti:{jti}")
+    return bool(result)
