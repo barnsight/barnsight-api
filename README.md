@@ -130,6 +130,8 @@ curl -X POST http://localhost:8000/api/v1/events \
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/admin/setup` | Create initial admin account |
+| `POST` | `/admin/register/farmer` | Register a new farmer account |
+| `POST` | `/admin/register/staff` | Register a new staff account |
 | `GET` | `/admin/dashboard` | System-wide statistics |
 | `PATCH` | `/admin/users/{username}/role` | Change user role |
 
@@ -149,11 +151,10 @@ All settings are loaded from `.env`. See `.env.example` for the full template.
 
 | Variable | Default | Description |
 |---|---|---|
-| `MONGO_HOSTNAME` | `localhost` | MongoDB host (use Atlas URI for cloud) |
+| `MONGO_HOSTNAME` | `localhost` | MongoDB host (use Atlas hostname for cloud) |
 | `MONGO_PORT` | `27017` | MongoDB port |
 | `MONGO_USERNAME` | `root` | MongoDB username |
 | `MONGO_PASSWORD` | `root` | MongoDB password |
-| `MONGO_DATABASE` | `nosql` | Database name |
 | `REDIS_HOST` | `localhost` | Redis host |
 | `REDIS_PORT` | `6379` | Redis port |
 | `REDIS_PASSWORD` | | Redis password |
@@ -191,10 +192,24 @@ Edge Devices (barnsight-edge)
     │                         │
 ┌───┴────┐            ┌──────┴──────┐
 │MongoDB │            │    Redis    │
-│ Events │            │  Cache +    │
-│ Users  │            │  Rate Limit │
+│ users  │            │  Cache +    │
+│barnsight│           │  Rate Limit │
 └────────┘            └─────────────┘
 ```
+
+### Database Structure
+
+| Database | Collections | Purpose |
+|---|---|---|
+| `users` | `admins`, `farmers`, `staff`, `edge`, `api_keys`, `user_barns` | User accounts, API keys, barn assignments |
+| `barnsight` | `barns`, `zones`, `devices`, `events` | Farm infrastructure and detection events |
+
+### Database Structure
+
+| Database | Collections | Purpose |
+|---|---|---|
+| `users` | `admins`, `farmers`, `staff`, `edge`, `api_keys`, `user_barns` | User accounts, API keys, barn assignments |
+| `barnsight` | `barns`, `zones`, `devices`, `events` | Farm infrastructure and detection events |
 
 ### Project Structure
 
@@ -207,11 +222,14 @@ src/app/
 │   └── v1/routers/
 │       ├── events.py          # Event ingestion and querying
 │       ├── analytics.py       # Aggregated detection insights
+│       ├── barns.py           # Barn/zone/device management
+│       ├── detections.py      # Detection-specific routes
+│       ├── reports.py         # Report generation
 │       ├── auth.py            # Login, token refresh, logout
 │       ├── google_auth.py     # Google OAuth2 flow
 │       ├── user.py            # Profile management
 │       ├── users.py           # Admin user management
-│       ├── admin.py           # Admin setup, dashboard, role changes
+│       ├── admin.py           # Admin setup, dashboard, role changes, user registration
 │       ├── api_keys.py        # API key CRUD
 │       └── health.py          # Health check
 ├── core/
@@ -233,17 +251,19 @@ src/app/
     ├── base_crud.py           # Generic CRUD base class
     ├── user_crud.py           # User operations across role collections
     ├── event_crud.py          # Event operations and analytics
-    └── api_key_crud.py        # API key validation and management
+    ├── api_key_crud.py        # API key validation and management
+    └── barn_crud.py           # Barn/zone/device operations
 ```
 
 ---
 
 ## Farmer Workflow
 
-1. **Create Account**: Register and log in via the Web Dashboard.
-2. **Generate API Key**: Navigate to `/api-keys` to create a key for your barn's hardware.
-3. **Deploy Edge**: Insert the generated `bs_...` key into your **BarnSight Edge** configuration.
-4. **Monitor**: View real-time manure detections and analytics reports.
+1. **Admin Creates Account**: An admin registers the farmer account via `/admin/register/farmer`.
+2. **Login**: Farmer logs in via username/password or Google OAuth.
+3. **Generate API Key**: Navigate to `/api-keys` to create a key for your barn's hardware.
+4. **Deploy Edge**: Insert the generated `bs_...` key into your **BarnSight Edge** configuration.
+5. **Monitor**: View real-time manure detections and analytics reports.
 
 ---
 
