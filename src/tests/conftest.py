@@ -1,23 +1,24 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
-from app.main import app
-from api.dependencies import get_mongo_client, get_redis_client, get_current_user, limit_dependency
 
+import pytest
+from api.dependencies import get_current_user, get_mongo_client, get_redis_client, limit_dependency
 from core.database import MongoClient
+from fastapi.testclient import TestClient
+
+from app.main import app
 
 
 @pytest.fixture
 def mock_mongo_client():
   mock_client = MagicMock()
-  
+
   # Store database mocks by name
   databases = {}
 
   def get_database(db_name, *args, **kwargs):
     if db_name not in databases:
       mock_db = MagicMock()
-      
+
       # Store collection mocks by name per database
       collections = {}
 
@@ -33,9 +34,13 @@ def mock_mongo_client():
           coll.delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
           coll.find_one_and_update = AsyncMock(return_value=None)
           coll.count_documents = AsyncMock(return_value=0)
-          
+
           mock_cursor = MagicMock()
           mock_cursor.to_list = AsyncMock(return_value=[])
+          # Support method chaining: find().sort().skip().limit().to_list()
+          mock_cursor.sort.return_value = mock_cursor
+          mock_cursor.skip.return_value = mock_cursor
+          mock_cursor.limit.return_value = mock_cursor
           coll.find.return_value = mock_cursor
           collections[coll_name] = coll
         return collections[coll_name]
@@ -48,13 +53,13 @@ def mock_mongo_client():
 
   mock_client.get_database.side_effect = get_database
   mock_client.__getitem__.side_effect = get_database
-  
+
   # Session / Transaction mocks
   mock_session = AsyncMock()
   mock_client.start_session = AsyncMock(return_value=mock_session)
   mock_session.__aenter__ = AsyncMock(return_value=mock_session)
   mock_session.__aexit__ = AsyncMock(return_value=None)
-  
+
   mock_transaction = AsyncMock()
   mock_session.start_transaction = MagicMock(return_value=mock_transaction)
   mock_transaction.__aenter__ = AsyncMock(return_value=mock_transaction)
@@ -67,7 +72,7 @@ def mock_mongo_client():
   MongoClient._client = mock_client
   MongoClient.connect = AsyncMock()
   MongoClient.close = AsyncMock()
-  
+
   return mock_client
 
 
@@ -85,10 +90,10 @@ def client(mock_mongo_client, mock_redis_client):
   app.dependency_overrides[get_mongo_client] = lambda: mock_mongo_client
   app.dependency_overrides[get_redis_client] = lambda: mock_redis_client
   app.dependency_overrides[limit_dependency] = lambda: None
-  
+
   with TestClient(app) as c:
     yield c
-  
+
   app.dependency_overrides = {}
 
 
@@ -99,7 +104,33 @@ def authorized_client(client):
     "username": "admin",
     "email": "admin@example.com",
     "role": "admins",
-    "scopes": ["admin", "edge", "user"]
+    "scopes": ["admin", "edge", "user"],
+  }
+  app.dependency_overrides[get_current_user] = lambda: user_data
+  return client
+
+
+@pytest.fixture
+def farmer_client(client):
+  """Client with mocked farmer user."""
+  user_data = {
+    "username": "farmer",
+    "email": "farmer@example.com",
+    "role": "farmers",
+    "scopes": ["farmer"],
+  }
+  app.dependency_overrides[get_current_user] = lambda: user_data
+  return client
+
+
+@pytest.fixture
+def staff_client(client):
+  """Client with mocked staff user."""
+  user_data = {
+    "username": "staff",
+    "email": "staff@example.com",
+    "role": "staff",
+    "scopes": ["staff"],
   }
   app.dependency_overrides[get_current_user] = lambda: user_data
   return client
@@ -108,24 +139,6 @@ def authorized_client(client):
 @pytest.fixture
 def edge_client(client):
   """Client with mocked edge user."""
-  user_data = {
-    "username": "edge",
-    "email": "edge@example.com",
-    "role": "edge",
-    "scopes": ["edge"]
-  }
-  app.dependency_overrides[get_current_user] = lambda: user_data
-  return client
-
-
-@pytest.fixture
-def user_client(client):
-  """Client with mocked user."""
-  user_data = {
-    "username": "user",
-    "email": "user@example.com",
-    "role": "user",
-    "scopes": ["user"]
-  }
+  user_data = {"username": "edge", "email": "edge@example.com", "role": "edge", "scopes": ["edge"]}
   app.dependency_overrides[get_current_user] = lambda: user_data
   return client

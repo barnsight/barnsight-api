@@ -47,7 +47,7 @@ async def read_user(
       pass
   else:
     # Check if user exists in MongoDB
-    users_db = mongo.get_database(settings.MONGO_DATABASE)
+    users_db = mongo.get_database("users")
     if not (user := await UserCRUD(users_db).find(username=username)):
       raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 
@@ -74,7 +74,7 @@ async def read_users(
   """
   Returns all users by role.
   """
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   return await UserCRUD(users_db).read_all(role)
 
 
@@ -92,7 +92,7 @@ async def update_user(
   """
   Updates user data by `username`.
   """
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
 
   # Update the user data
   if not (
@@ -123,7 +123,7 @@ async def delete_user(
   """
 
   # Delete the user account
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   if not await UserCRUD(users_db).delete(username=username):
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
 

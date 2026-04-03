@@ -56,7 +56,7 @@ async def create_event(
   Uploads base64 image snapshots to Cloudinary if provided.
   Associates the event with the authenticated account.
   """
-  events_db = mongo.get_database("events")
+  events_db = mongo.get_database("barnsight")
   event_crud = EventCRUD(events_db)
 
   event_dict = event.model_dump()
@@ -90,7 +90,7 @@ async def get_events(
   limit: int = Query(100, ge=1, le=1000, description="Pagination limit"),
 ):
   """Query events belonging to the authenticated account."""
-  events_db = mongo.get_database("events")
+  events_db = mongo.get_database("barnsight")
   event_crud = EventCRUD(events_db)
 
   query = {"account_id": owner_id}

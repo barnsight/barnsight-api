@@ -8,7 +8,10 @@ from .routers import (
   admin,
   events,
   analytics,
-  api_keys
+  api_keys,
+  barns,
+  detections,
+  reports,
 )
 
 # Initialize v1 router
@@ -24,3 +27,6 @@ api_v1_router.include_router(admin.router, prefix="/admin")
 api_v1_router.include_router(events.router, prefix="/events")
 api_v1_router.include_router(analytics.router, prefix="/analytics")
 api_v1_router.include_router(api_keys.router, prefix="/api-keys")
+api_v1_router.include_router(barns.router, prefix="/barns")
+api_v1_router.include_router(detections.router, prefix="/detections")
+api_v1_router.include_router(reports.router, prefix="/reports")

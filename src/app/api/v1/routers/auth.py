@@ -5,6 +5,7 @@ from fastapi import HTTPException, APIRouter, status, Depends, Header
 import json
 
 from core.config import settings
+from core.config import settings
 from core.schemas.token import TokenBase, TokenPayload
 from core.security.jwt import OAuthJWTBearer
 from core.database import MongoClient, RedisClient
@@ -30,7 +31,7 @@ async def login(
   Log in using user credentials.
   """
   # Authenticate user credentials from the MongoDB database
-  users_db = mongo.get_database(settings.MONGO_DATABASE)
+  users_db = mongo.get_database("users")
   if not (
     user := await UserCRUD(users_db).authenticate(
       username=form_data.username, plain_pwd=form_data.password, exclude=["_id", "password"]

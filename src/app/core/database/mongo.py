@@ -1,10 +1,6 @@
 from pymongo.asynchronous.mongo_client import AsyncMongoClient
-from pymongo.asynchronous.database import AsyncDatabase 
-from pymongo.errors import (
-  ConfigurationError,
-  ConnectionFailure,
-  OperationFailure
-)
+from pymongo.asynchronous.database import AsyncDatabase
+from pymongo.errors import ConfigurationError, ConnectionFailure, OperationFailure
 from typing import Optional
 
 from core.security.utils import DBConnection
@@ -28,7 +24,7 @@ class MongoClient(DBConnection):
     """Get a MongoDB database."""
     if cls._client is None:
       raise ConnectionFailure("[x] Not connected to MongoDB.")
-    return cls._client.get_database(name or settings.MONGO_DATABASE)
+    return cls._client.get_database(name)
 
   @classmethod
   async def connect(cls):
@@ -42,12 +38,16 @@ class MongoClient(DBConnection):
         minPoolSize=settings.MONGO_MIN_POOL_SIZE,
         connectTimeoutMS=settings.MONGO_CONNECT_TIMEOUT_MS,
         serverSelectionTimeoutMS=settings.MONGO_SERVER_SELECTION_TIMEOUT_MS,
-        retryWrites=settings.MONGO_RETRY_WRITES
+        retryWrites=settings.MONGO_RETRY_WRITES,
+        tls=True,
+        tlsAllowInvalidCertificates=False,
       )
       await cls._client.admin.command("ping")
       logger.info("[+] Successfully connected to MongoDB.")
     except (ConfigurationError, OperationFailure) as e:
-      logger.error({"message": "[x] Failed to connect to MongoDB.", "detail": str(e)}, exc_info=True)
+      logger.error(
+        {"message": "[x] Failed to connect to MongoDB.", "detail": str(e)}, exc_info=True
+      )
       return
 
   @classmethod

@@ -1,7 +1,6 @@
 from typing import Annotated, List
 from fastapi import APIRouter, Depends, status, HTTPException, Body
 from core.schemas.api_keys import ApiKeyCreate, ApiKeyResponse
-from core.config import settings
 from core.database import MongoClient
 from api.dependencies import get_mongo_client, get_current_user, limit_dependency
 from crud.api_key_crud import ApiKeyCRUD
@@ -23,7 +22,7 @@ async def create_api_key(
   """
   Generate a new API key for the current account.
   """
-  db = mongo.get_database(settings.MONGO_DATABASE)
+  db = mongo.get_database("users")
   api_key_crud = ApiKeyCRUD(db)
 
   # We use username or a unique ID from the user profile as owner_id
@@ -46,7 +45,7 @@ async def list_api_keys(
   """
   List all API keys belonging to the current account.
   """
-  db = mongo.get_database(settings.MONGO_DATABASE)
+  db = mongo.get_database("users")
   api_key_crud = ApiKeyCRUD(db)
 
   owner_id = current_user.get("username")
@@ -65,7 +64,7 @@ async def delete_api_key(
   """
   Revoke a specific API key.
   """
-  db = mongo.get_database(settings.MONGO_DATABASE)
+  db = mongo.get_database("users")
   api_key_crud = ApiKeyCRUD(db)
 
   owner_id = current_user.get("username")
