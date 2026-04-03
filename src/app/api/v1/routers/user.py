@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import HTTPException, APIRouter, status, Depends, Body
 
+from core.config import settings
 from core.schemas.user import UserUpdate
 from core.schemas.utils import UpdateEmail, UpdatePassword
 from core.security.utils import Hash
@@ -49,7 +50,7 @@ async def update_user_profile(
   redis: Annotated[RedisClient, Depends(get_redis_client)],
 ):
   """Update the current user's profile fields."""
-  users_db = mongo.get_database("users")
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
   username = user.get("username")
 
   update_data = user_update.model_dump(exclude_unset=True)
@@ -77,7 +78,7 @@ async def update_password(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Change the current user's password after verifying the current one."""
-  users_db = mongo.get_database("users")
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
   username = user.get("username")
 
   if not await UserCRUD(users_db).authenticate(
@@ -108,7 +109,7 @@ async def update_email(
   redis: Annotated[RedisClient, Depends(get_redis_client)],
 ):
   """Add or change the user's email after password verification."""
-  users_db = mongo.get_database("users")
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
 
   # Check email is not already in use
   if await UserCRUD(users_db).find(email=user_update.email):
@@ -118,9 +119,7 @@ async def update_email(
     )
 
   username = user.get("username")
-  if not await UserCRUD(users_db).authenticate(
-    username=username, plain_pwd=user_update.password
-  ):
+  if not await UserCRUD(users_db).authenticate(username=username, plain_pwd=user_update.password):
     raise HTTPException(
       status_code=status.HTTP_401_UNAUTHORIZED,
       detail="Couldn't validate credentials",

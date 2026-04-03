@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, status, Security, Depends, Body
 
+from core.config import settings
 from core.database import MongoClient
 from core.schemas.admin import AdminCreate
 from api.dependencies import get_mongo_client, get_current_user, limit_dependency
@@ -26,7 +27,7 @@ async def create_admin_account(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Create the initial admin account. One-time setup endpoint."""
-  users_db = mongo.get_database("users")
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
   if await UserCRUD(users_db).find(username=admin.username):
     raise HTTPException(
       status_code=status.HTTP_409_CONFLICT,
@@ -46,7 +47,7 @@ async def admin_dashboard(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Return system-wide statistics for the admin dashboard."""
-  users_db = mongo.get_database("users")
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
   barnsight_db = mongo.get_database("barnsight")
 
   return {
@@ -72,7 +73,7 @@ async def change_user_role(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
 ):
   """Change a user's role and migrate their document between collections."""
-  users_db = mongo.get_database("users")
+  users_db = mongo.get_database(settings.MONGO_DATABASE)
   user_crud = UserCRUD(users_db)
 
   user = await user_crud.find(username=username)
