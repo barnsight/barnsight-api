@@ -1,5 +1,5 @@
-from pymongo.asynchronous.mongo_client import AsyncMongoClient
-from pymongo.asynchronous.database import AsyncDatabase
+from pymongo.mongo_client import MongoClient as SyncMongoClient
+from pymongo.database import Database
 from pymongo.errors import ConfigurationError, ConnectionFailure, OperationFailure
 from typing import Optional
 
@@ -11,7 +11,7 @@ from core.config import settings
 
 class MongoClient(DBConnection):
   _instance: Optional["MongoClient"] = None
-  _client: Optional[AsyncMongoClient] = None
+  _client: Optional[SyncMongoClient] = None
 
   def __new__(cls, *args, **kwargs):
     """Implement singleton pattern."""
@@ -20,19 +20,19 @@ class MongoClient(DBConnection):
     return cls._instance
 
   @classmethod
-  def get_database(cls, name: str) -> AsyncDatabase:
+  def get_database(cls, name: str) -> Database:
     """Get a MongoDB database."""
     if cls._client is None:
       raise ConnectionFailure("[x] Not connected to MongoDB.")
     return cls._client.get_database(name)
 
   @classmethod
-  async def connect(cls):
+  def connect(cls):
     """
     Establish MongoDB connection.
     """
     try:
-      cls._client = AsyncMongoClient(
+      cls._client = SyncMongoClient(
         settings.MONGO_URI,
         maxPoolSize=settings.MONGO_MAX_POOL_SIZE,
         minPoolSize=settings.MONGO_MIN_POOL_SIZE,
@@ -42,7 +42,7 @@ class MongoClient(DBConnection):
         tls=True,
         tlsAllowInvalidCertificates=False,
       )
-      await cls._client.admin.command("ping")
+      cls._client.admin.command("ping")
       logger.info("[+] Successfully connected to MongoDB.")
     except (ConfigurationError, OperationFailure) as e:
       logger.error(
@@ -51,13 +51,13 @@ class MongoClient(DBConnection):
       return
 
   @classmethod
-  async def close(cls):
+  def close(cls):
     """
     Close MongoDB connection.
     """
     if cls._client is not None:
       try:
-        await cls._client.aclose()
+        cls._client.close()
         logger.info("[+] MongoDB connection closed.")
       except Exception as e:
         logger.error({"msg": "[x] Error closing MongoDB connection.", "detail": str(e)})

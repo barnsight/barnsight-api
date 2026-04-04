@@ -29,7 +29,7 @@ async def validate_api_key(
     return None
 
   if not MongoClient._client:
-    await MongoClient.connect()
+    MongoClient.connect()
 
   db = mongo.get_database("users")
   api_key_crud = ApiKeyCRUD(db)

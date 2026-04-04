@@ -26,12 +26,12 @@ from core.services.cloudinary_service import init_cloudinary
 async def lifespan(app: FastAPI):
   """Manage application startup and shutdown lifecycle."""
   await RedisClient.connect()
-  await MongoClient.connect()
+  MongoClient.connect()
   init_cloudinary()
   try:
     yield
   finally:
-    await MongoClient.close()
+    MongoClient.close()
     await RedisClient.close()
 
 
@@ -86,6 +86,7 @@ app = create_app()
 
 if __name__ == "__main__":
   import uvicorn
+
   uvicorn.run(
     app="app.main:app",
     host="0.0.0.0",
