@@ -2,9 +2,10 @@ FROM python:3.11-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1
 
-# Install build dependencies
+# Install build dependencies and CA certificates
 RUN apt-get update && \
   apt-get install -y --no-install-recommends gcc python3-dev ca-certificates && \
+  update-ca-certificates && \
   rm -rf /var/lib/apt/lists/*
 
 # Install uv
