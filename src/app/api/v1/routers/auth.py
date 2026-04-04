@@ -72,8 +72,12 @@ async def auth_token(
   """
   Log in using an access token.
   """
+  raw_token = token.access_token
+  if raw_token.startswith("Bearer "):
+    raw_token = raw_token[7:]
+
   # Decode a user's JWT
-  if not (payload := OAuthJWTBearer.decode(token.access_token)):
+  if not (payload := OAuthJWTBearer.decode(raw_token)):
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token.")
 
   # Get variables from the payload
@@ -106,8 +110,12 @@ async def logout(
   """
   Log out from user account.
   """
+  raw_token = token.access_token
+  if raw_token.startswith("Bearer "):
+    raw_token = raw_token[7:]
+
   # Decode a user's JWT
-  payload = OAuthJWTBearer.decode(token=token.access_token)
+  payload = OAuthJWTBearer.decode(token=raw_token)
   jti, exp = payload.get("jti"), payload.get("exp")
 
   # Check if jti is revoked
