@@ -69,9 +69,10 @@ def mock_mongo_client():
   mock_client._client = mock_client
 
   # PATCH GLOBAL CLIENT
+  mock_client.aclose = AsyncMock()
   MongoClient._client = mock_client
-  MongoClient.connect = MagicMock()
-  MongoClient.close = MagicMock()
+  MongoClient.connect = AsyncMock()
+  MongoClient.close = AsyncMock()
 
   return mock_client
 

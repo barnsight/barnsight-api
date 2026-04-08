@@ -26,12 +26,12 @@ from core.services.cloudinary_service import init_cloudinary
 async def lifespan(app: FastAPI):
   """Manage application startup and shutdown lifecycle."""
   await RedisClient.connect()
-  MongoClient.connect()
+  await MongoClient.connect()
   init_cloudinary()
   try:
     yield
   finally:
-    MongoClient.close()
+    await MongoClient.close()
     await RedisClient.close()
 
 
