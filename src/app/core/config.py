@@ -104,8 +104,19 @@ class Settings(BaseSettings):
   JWT_ALGORITHM: str = "RS256"
   JWT_EXPIRE_MINUTES: int = 60
 
-  PRIVATE_KEY_PEM: str
-  PUBLIC_KEY_PEM: str
+  PRIVATE_KEY_PEM: Optional[str] = None
+  PUBLIC_KEY_PEM: Optional[str] = None
+
+  def model_post_init(self, __context: Any) -> None:
+    """Generate RSA keys if not provided in environment."""
+    if not self.PRIVATE_KEY_PEM or not self.PUBLIC_KEY_PEM:
+      from core.security.keys import generate_rsa_key_pair
+      from core.logger import logger
+
+      logger.info("Generating new RSA key pair for JWT signing")
+      private, public = generate_rsa_key_pair()
+      self.PRIVATE_KEY_PEM = self.PRIVATE_KEY_PEM or private
+      self.PUBLIC_KEY_PEM = self.PUBLIC_KEY_PEM or public
 
   @computed_field  # type: ignore[prop-decorator]
   @property
