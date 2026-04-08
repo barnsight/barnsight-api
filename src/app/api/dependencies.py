@@ -44,7 +44,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 async def get_mongo_client() -> AsyncGenerator[MongoClient, None]:
   """Yield the shared MongoDB client, connecting if needed."""
   if not MongoClient._client:
-    MongoClient.connect()
+    await MongoClient.connect()
   yield MongoClient._client
 
 
