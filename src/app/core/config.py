@@ -71,14 +71,7 @@ class Settings(BaseSettings):
   @property
   def MONGO_URI(self) -> str:
     """Build MongoDB URI from settings, supporting both Atlas and local."""
-    if ".mongodb.net" in self.MONGO_HOSTNAME:
-      return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/nosql?authSource=admin"
-    auth = (
-      f"{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@"
-      if self.MONGO_USERNAME and self.MONGO_PASSWORD
-      else ""
-    )
-    return f"mongodb://{auth}{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/nosql"
+    return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/nosql?authSource=admin"
 
   # Redis settings
   REDIS_HOST: str = "localhost"
