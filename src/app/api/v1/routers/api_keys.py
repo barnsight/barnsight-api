@@ -1,9 +1,10 @@
 from typing import Annotated, List
-from fastapi import APIRouter, Depends, status, HTTPException, Body
-from core.schemas.api_keys import ApiKeyCreate, ApiKeyResponse
+
+from api.dependencies import get_current_user, get_mongo_client, limit_dependency
 from core.database import MongoClient
-from api.dependencies import get_mongo_client, get_current_user, limit_dependency
+from core.schemas.api_keys import ApiKeyCreate, ApiKeyResponse
 from crud.api_key_crud import ApiKeyCRUD
+from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(tags=["API Keys"])
 

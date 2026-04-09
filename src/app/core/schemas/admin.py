@@ -1,9 +1,9 @@
 """Admin user schema for initial account creation."""
 
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from .user import UserName
 from .utils import PASSWORDstr

@@ -1,8 +1,8 @@
 """Shared utility schemas used across multiple endpoints."""
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, EmailStr, BeforeValidator
+from pydantic import BaseModel, BeforeValidator, EmailStr, Field
 
 PASSWORDstr = Annotated[str, Field(..., min_length=8, max_length=128)]
 PyObjectId = Annotated[str, BeforeValidator(str)]
@@ -26,3 +26,10 @@ class UpdateEmail(BaseModel):
 
   email: EmailStr
   password: PASSWORDstr
+
+
+class RecoverPassword(BaseModel):
+  """Request body for recovering a user's password."""
+
+  email: EmailStr
+  new_password: PASSWORDstr

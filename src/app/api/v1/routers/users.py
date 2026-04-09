@@ -1,16 +1,14 @@
-from typing import Annotated, Optional, List
-from fastapi import APIRouter, HTTPException, status, Security, Depends, Path, Body
 import json
 from datetime import timedelta
+from typing import Annotated, List
 
-from core.logger import logger
+from api.dependencies import get_current_user, get_mongo_client, get_redis_client, limit_dependency
 from core.config import settings
-
-from core.schemas.user import UserBase, UserUpdate
 from core.database import MongoClient, RedisClient
-from api.dependencies import get_mongo_client, get_redis_client, get_current_user
-from api.dependencies import limit_dependency
+from core.logger import logger
+from core.schemas.user import UserBase, UserUpdate
 from crud import UserCRUD
+from fastapi import APIRouter, Body, Depends, HTTPException, Path, Security, status
 
 router = APIRouter(tags=["Users"])
 

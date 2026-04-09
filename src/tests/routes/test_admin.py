@@ -1,11 +1,9 @@
-
-
 def test_create_admin_account(client, mock_mongo_client):
   mock_db = mock_mongo_client.get_database("users")
   mock_db.list_collection_names.return_value = []
 
   response = client.post(
-    "/api/v1/admin/setup",
+    "/api/v1/admin",
     json={
       "username": "new_admin",
       "password": "Password123!",

@@ -1,17 +1,16 @@
-from starlette.middleware.base import BaseHTTPMiddleware
-from slowapi.util import get_remote_address
-
-from core.config import settings
 from api.dependencies import get_jwt_payload
+from core.config import settings
+from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-  def __init__(self, app, dispatch = None):
+  def __init__(self, app, dispatch=None):
     super().__init__(app, dispatch)
 
   async def dispatch(self, request, call_next):
-    if (payload := get_jwt_payload(request)):
-      role, jti = payload.get("role"), payload.get("jti")  
+    if payload := get_jwt_payload(request):
+      role, jti = payload.get("role"), payload.get("jti")
       request.state.limit_value = settings.RATE_LIMITS.get(role, settings.RATE_LIMIT_ANONYMOUS)
       request.state.identifier = f"{role}:{jti}"
     else:
