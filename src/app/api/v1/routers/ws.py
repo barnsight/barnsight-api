@@ -6,7 +6,7 @@ from typing import Annotated
 from api.dependencies import get_jwt_payload
 from core.database import RedisClient
 from core.logger import logger
-from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 router = APIRouter(tags=["WebSockets"])
 
@@ -17,6 +17,7 @@ async def websocket_endpoint(
   token: Annotated[str, Query(..., description="JWT for authentication")],
 ):
   """Establish a WebSocket connection for real-time event updates."""
+
   # Manually validate token since this is a WebSocket
   class MockRequest:
     def __init__(self, token):

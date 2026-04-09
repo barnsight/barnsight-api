@@ -4,10 +4,10 @@ Handles detection event submission from edge devices (API key)
 or web users (JWT), and event querying with filtering.
 """
 
+import json
 from datetime import datetime
 from typing import Annotated, Optional
 
-import json
 from api.auth_dependencies import validate_api_key
 from api.dependencies import get_jwt_payload, get_mongo_client, limit_dependency
 from core.config import settings
@@ -86,6 +86,7 @@ async def create_event(
   # Trigger alerting background task if confidence is high
   if result.get("confidence", 0) > 0.8:
     from core.services.alert_service import check_and_send_alert
+
     background_tasks.add_task(check_and_send_alert, owner_id, result)
 
   return result
