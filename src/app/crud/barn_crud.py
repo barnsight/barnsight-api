@@ -28,7 +28,7 @@ class BarnCRUD(BaseCRUD):
       [("barn_id", ASCENDING), ("zone_id", ASCENDING), ("camera_id", ASCENDING)], unique=True
     )
 
-  async def get_all_barns(self) -> List[dict]:
+  async def get_all_barns(self, account_id: Optional[str] = None) -> List[dict]:
     """Return all barns with their zones and cameras."""
     barns_cursor = self.db[self.barns_collection].find().sort("barn_id", ASCENDING)
     barns = await barns_cursor.to_list(length=None)
@@ -36,24 +36,24 @@ class BarnCRUD(BaseCRUD):
     result = []
     for barn in barns:
       barn["_id"] = str(barn["_id"])
-      zones = await self.get_zones_for_barn(barn["barn_id"])
+      zones = await self.get_zones_for_barn(barn["barn_id"], account_id)
       barn["zones"] = zones
       result.append(barn)
 
     return result
 
-  async def get_barn_by_id(self, barn_id: int) -> Optional[dict]:
+  async def get_barn_by_id(self, barn_id: int, account_id: Optional[str] = None) -> Optional[dict]:
     """Return a single barn with its zones and cameras."""
     barn = await self.db[self.barns_collection].find_one({"barn_id": barn_id})
     if not barn:
       return None
 
     barn["_id"] = str(barn["_id"])
-    zones = await self.get_zones_for_barn(barn_id)
+    zones = await self.get_zones_for_barn(barn_id, account_id)
     barn["zones"] = zones
     return barn
 
-  async def get_zones_for_barn(self, barn_id: int) -> List[dict]:
+  async def get_zones_for_barn(self, barn_id: int, account_id: Optional[str] = None) -> List[dict]:
     """Return all zones for a given barn with their cameras."""
     zones_cursor = (
       self.db[self.zones_collection].find({"barn_id": barn_id}).sort("zone_id", ASCENDING)
@@ -63,14 +63,16 @@ class BarnCRUD(BaseCRUD):
     result = []
     for zone in zones:
       zone["_id"] = str(zone["_id"])
-      cameras = await self.get_cameras_for_zone(barn_id, zone["zone_id"])
+      cameras = await self.get_cameras_for_zone(barn_id, zone["zone_id"], account_id)
       zone["cameras"] = cameras
       result.append(zone)
 
     return result
 
-  async def get_cameras_for_zone(self, barn_id: int, zone_id: int) -> List[dict]:
-    """Return all cameras for a given barn and zone."""
+  async def get_cameras_for_zone(self, barn_id: int, zone_id: int, account_id: Optional[str] = None) -> List[dict]:
+    """Return all cameras for a given barn and zone, with online status from Redis."""
+    from core.database import RedisClient
+
     cameras_cursor = (
       self.db[self.devices_collection]
       .find({"barn_id": barn_id, "zone_id": zone_id})
@@ -78,8 +80,18 @@ class BarnCRUD(BaseCRUD):
     )
     cameras = await cameras_cursor.to_list(length=None)
 
+    redis = RedisClient()
     for cam in cameras:
       cam["_id"] = str(cam["_id"])
+      
+      # Determine device status from Redis heartbeat
+      # If account_id is not provided, we might not be able to construct the key accurately
+      # but let's assume we can find it if we have it.
+      if account_id:
+        device_id = cam.get("camera_id") # Assuming camera_id is used as device_id
+        status_key = f"device:{account_id}:{device_id}:status"
+        is_online = await redis.get(status_key)
+        cam["status"] = "online" if is_online else "offline"
 
     return cameras
 

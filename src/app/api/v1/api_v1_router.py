@@ -7,6 +7,7 @@ from .routers import (
   auth,
   barns,
   detections,
+  devices,
   events,
   farmers,
   google_auth,
@@ -15,6 +16,7 @@ from .routers import (
   staff,
   user,
   users,
+  ws,
 )
 
 # Initialize v1 router
@@ -30,6 +32,8 @@ api_v1_router.include_router(admin.router, prefix="/admin")
 api_v1_router.include_router(farmers.router, prefix="/farmers")
 api_v1_router.include_router(staff.router, prefix="/staff")
 api_v1_router.include_router(events.router, prefix="/events")
+api_v1_router.include_router(ws.router, prefix="/ws")
+api_v1_router.include_router(devices.router, prefix="/devices")
 api_v1_router.include_router(analytics.router, prefix="/analytics")
 api_v1_router.include_router(api_keys.router, prefix="/api-keys")
 api_v1_router.include_router(barns.router, prefix="/barns")

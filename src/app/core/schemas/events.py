@@ -30,6 +30,7 @@ class EventResponse(EventCreate):
 class EventListResponse(BaseModel):
   events: List[EventResponse]
   total: int
+  next_cursor: Optional[str] = None
 
 
 class AnalyticsResponse(BaseModel):
