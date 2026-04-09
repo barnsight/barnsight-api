@@ -120,6 +120,7 @@ curl -X POST http://localhost:8000/api/v1/events \
 | `GET` | `/user/me` | Get current user profile |
 | `PATCH` | `/user/me` | Update profile |
 | `PATCH` | `/user/me/password` | Change password |
+| `PATCH` | `/user/password` | Recover password |
 | `PATCH` | `/user/email` | Update email |
 | `POST` | `/api-keys` | Create API key for edge devices |
 | `GET` | `/api-keys` | List API keys |
