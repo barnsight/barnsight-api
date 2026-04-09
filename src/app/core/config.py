@@ -5,9 +5,9 @@ with automatic .env file loading.
 """
 
 import secrets
-from typing import Annotated, Any, List, Optional, Dict, TypeVar
+from typing import Annotated, Any, Dict, List, Optional, TypeVar
 
-from pydantic import BaseModel, AnyUrl, BeforeValidator, computed_field
+from pydantic import AnyUrl, BaseModel, BeforeValidator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Generic type variable for CRUD operations
@@ -110,8 +110,8 @@ class Settings(BaseSettings):
   def model_post_init(self, __context: Any) -> None:
     """Generate RSA keys if not provided in environment."""
     if not self.PRIVATE_KEY_PEM or not self.PUBLIC_KEY_PEM:
-      from core.security.keys import generate_rsa_key_pair
       from core.logger import logger
+      from core.security.keys import generate_rsa_key_pair
 
       logger.info("Generating new RSA key pair for JWT signing")
       private, public = generate_rsa_key_pair()

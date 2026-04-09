@@ -4,14 +4,14 @@ Uses RSA asymmetric keys (RS256) for token signing.
 Token revocation is handled via a Redis-backed JTI blacklist.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import uuid
-import jwt
 
-from core.logger import logger
+import jwt
 from core.config import settings
 from core.database import RedisClient
+from core.logger import logger
 
 
 class OAuthJWTBearer:

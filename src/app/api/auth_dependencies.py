@@ -5,11 +5,10 @@ Validates X-API-Key header against stored keys in MongoDB.
 
 from typing import Optional
 
-from fastapi import Request, Depends, HTTPException, status
-from fastapi.security import APIKeyHeader
-
 from core.database import MongoClient
 from crud.api_key_crud import ApiKeyCRUD
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader
 
 # Header name for edge device API keys
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)

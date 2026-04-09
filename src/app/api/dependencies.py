@@ -4,20 +4,19 @@ Provides database clients, authentication, rate limiting,
 and JWT extraction for all route handlers.
 """
 
-from typing import Annotated, AsyncGenerator, Optional
-from datetime import timedelta
 import json
+from datetime import timedelta
+from typing import Annotated, AsyncGenerator, Optional
 
-from fastapi import Depends, HTTPException, status, Request
+from core.config import REDIS_URI, settings
+from core.database import MongoClient, RedisClient
+from core.logger import logger
+from core.security.jwt import OAuthJWTBearer
+from crud import UserCRUD
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, SecurityScopes
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-
-from core.logger import logger
-from core.config import settings, REDIS_URI
-from core.security.jwt import OAuthJWTBearer
-from core.database import MongoClient, RedisClient
-from crud import UserCRUD
 
 
 def get_identifier(request: Request) -> str:

@@ -2,8 +2,6 @@
 
 from typing import List
 
-from pydantic import BaseModel
-
 from .user import UserName
 from .utils import PASSWORDstr
 

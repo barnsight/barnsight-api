@@ -1,17 +1,15 @@
-from typing import Annotated
-from datetime import timedelta
-from fastapi.security import OAuth2PasswordRequestForm
-from fastapi import HTTPException, APIRouter, status, Depends, Header
 import json
+from datetime import timedelta
+from typing import Annotated
 
+from api.dependencies import get_current_user, get_mongo_client, get_redis_client, limit_dependency
 from core.config import settings
-from core.config import settings
+from core.database import MongoClient, RedisClient
 from core.schemas.token import TokenBase, TokenPayload
 from core.security.jwt import OAuthJWTBearer
-from core.database import MongoClient, RedisClient
-from api.dependencies import get_mongo_client, get_redis_client, get_current_user
-from api.dependencies import limit_dependency
 from crud import UserCRUD
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 
 router = APIRouter(tags=["Authentication"])
 

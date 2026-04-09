@@ -5,21 +5,18 @@ Sets up middleware, routers, database connections, and monitoring.
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
-
-from prometheus_fastapi_instrumentator import Instrumentator
-
-from slowapi.errors import RateLimitExceeded
-
+from api.api import api_main_router
+from api.dependencies import limiter
 from core.config import settings
 from core.database import MongoClient, RedisClient
-from core.middleware import RateLimitMiddleware
 from core.errors import rate_limit_exceeded_handler
-from api.dependencies import limiter
-from api.api import api_main_router
+from core.middleware import RateLimitMiddleware
 from core.services.cloudinary_service import init_cloudinary
+from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+from slowapi.errors import RateLimitExceeded
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 
 @asynccontextmanager

@@ -4,22 +4,20 @@ Handles redirect to Google, token exchange, JWT issuance,
 and secure cookie setting for the frontend.
 """
 
-from typing import Annotated
-from datetime import timedelta
-
-from fastapi.responses import RedirectResponse
-from fastapi import HTTPException, APIRouter, Request, status, Depends
 import json
+from datetime import timedelta
+from typing import Annotated
 
+from api.dependencies import get_mongo_client, get_redis_client, limit_dependency
 from authlib.integrations.base_client.errors import MismatchingStateError, OAuthError
-
-from core.logger import logger
 from core.config import settings
+from core.database import MongoClient
+from core.logger import logger
 from core.security.jwt import OAuthJWTBearer
 from core.services.oauth import google_oauth
-from core.database import MongoClient, RedisClient
-from api.dependencies import get_mongo_client, get_redis_client, limit_dependency
 from crud import UserCRUD
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from redis.asyncio import Redis
 
 router = APIRouter(tags=["Authentication"])
@@ -57,7 +55,7 @@ async def auth_google(
     )
     raise HTTPException(
       status_code=status.HTTP_400_BAD_REQUEST,
-      detail="Authentication failed due to security check (state mismatch). Please try logging in again.",
+      detail="Authentication failed due to security check (state mismatch).",
     )
   except OAuthError as e:
     logger.warning(

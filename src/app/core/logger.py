@@ -1,7 +1,7 @@
+import json
+import logging
 from datetime import datetime, timezone
 from logging.config import dictConfig
-import logging
-import json
 
 
 # Define structure of logging configuration

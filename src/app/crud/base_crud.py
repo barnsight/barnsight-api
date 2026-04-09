@@ -6,8 +6,8 @@ that can be extended by collection-specific CRUD classes.
 
 from typing import Any, Optional
 
-from pymongo.asynchronous.database import AsyncDatabase
 from core.config import ModelType
+from pymongo.asynchronous.database import AsyncDatabase
 
 
 class BaseCRUD:

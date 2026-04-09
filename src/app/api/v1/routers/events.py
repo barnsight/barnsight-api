@@ -4,24 +4,30 @@ Handles detection event submission from edge devices (API key)
 or web users (JWT), and event querying with filtering.
 """
 
-from typing import Annotated, Optional
 from datetime import datetime
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, status, Depends, Query, HTTPException, Request
-
-from core.schemas.events import EventCreate, EventResponse, EventListResponse
-from core.database import MongoClient
-from api.dependencies import get_mongo_client, limit_dependency, get_jwt_payload
 from api.auth_dependencies import validate_api_key
-from crud.event_crud import EventCRUD
+from api.dependencies import get_jwt_payload, get_mongo_client, limit_dependency
+from core.config import settings
+from core.database import MongoClient
+from core.schemas.events import EventCreate, EventListResponse, EventResponse
 from core.services.cloudinary_service import upload_base64_image
+from crud.event_crud import EventCRUD
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.security import OAuth2PasswordBearer
 
 router = APIRouter(tags=["Events"])
+
+optional_oauth2_scheme = OAuth2PasswordBearer(
+  tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False
+)
 
 
 async def get_event_owner(
   request: Request,
   api_key_data: Annotated[Optional[dict], Depends(validate_api_key)],
+  token: Annotated[Optional[str], Depends(optional_oauth2_scheme)],
 ):
   """Determine the account owner from API key or JWT.
 
@@ -69,8 +75,7 @@ async def create_event(
     event_dict["image_snapshot"] = secure_url
 
   result = await event_crud.create_event(event_dict)
-  event_dict["_id"] = str(result.inserted_id)
-  return event_dict
+  return result
 
 
 @router.get(
@@ -91,7 +96,6 @@ async def get_events(
 ):
   """Query events belonging to the authenticated account."""
   events_db = mongo.get_database("barnsight")
-  event_crud = EventCRUD(events_db)
 
   query = {"account_id": owner_id}
   if camera_id:

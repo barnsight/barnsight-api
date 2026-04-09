@@ -4,11 +4,12 @@ Handles user lookup, creation, updates, deletion, and authentication.
 Uses a single 'users' collection with role-based document separation.
 """
 
-from typing import Optional, List, Union
+from typing import List, Optional, Union
 
 from core.config import ModelType
 from core.logger import logger
 from core.security.utils import Hash
+
 from .base_crud import BaseCRUD
 
 

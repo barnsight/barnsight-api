@@ -1,7 +1,6 @@
 """Admin management routes.
 
-Handles initial admin setup, dashboard stats, user role changes,
-and registration of farmer/staff accounts.
+Handles initial admin setup, dashboard stats, and user role changes.
 All endpoints require admin scope except /setup.
 """
 
@@ -10,7 +9,6 @@ from typing import Annotated
 from api.dependencies import get_current_user, get_mongo_client, limit_dependency
 from core.database import MongoClient
 from core.schemas.admin import AdminCreate
-from core.schemas.registration import FarmerCreate, StaffCreate
 from crud import UserCRUD
 from fastapi import APIRouter, Body, Depends, HTTPException, Security, status
 
@@ -18,7 +16,7 @@ router = APIRouter(tags=["Admin"])
 
 
 @router.post(
-  "/setup",
+  "",
   status_code=status.HTTP_201_CREATED,
   dependencies=[Depends(limit_dependency)],
 )
@@ -36,48 +34,6 @@ async def create_admin_account(
 
   await UserCRUD(users_db).create(admin)
   return {"message": "Admin account created successfully."}
-
-
-@router.post(
-  "/register/farmer",
-  status_code=status.HTTP_201_CREATED,
-  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
-)
-async def register_farmer(
-  farmer: Annotated[FarmerCreate, Body()],
-  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
-):
-  """Register a new farmer account. Admin only."""
-  users_db = mongo.get_database("users")
-  if await UserCRUD(users_db).find(username=farmer.username):
-    raise HTTPException(
-      status_code=status.HTTP_409_CONFLICT,
-      detail="Username already exists.",
-    )
-
-  await UserCRUD(users_db).create(farmer)
-  return {"message": "Farmer account created successfully."}
-
-
-@router.post(
-  "/register/staff",
-  status_code=status.HTTP_201_CREATED,
-  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
-)
-async def register_staff(
-  staff: Annotated[StaffCreate, Body()],
-  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
-):
-  """Register a new staff account. Admin only."""
-  users_db = mongo.get_database("users")
-  if await UserCRUD(users_db).find(username=staff.username):
-    raise HTTPException(
-      status_code=status.HTTP_409_CONFLICT,
-      detail="Username already exists.",
-    )
-
-  await UserCRUD(users_db).create(staff)
-  return {"message": "Staff account created successfully."}
 
 
 @router.get(

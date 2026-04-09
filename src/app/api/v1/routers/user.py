@@ -14,7 +14,7 @@ from api.dependencies import (
 )
 from core.database import MongoClient, RedisClient
 from core.schemas.user import UserUpdate
-from core.schemas.utils import UpdateEmail, UpdatePassword
+from core.schemas.utils import RecoverPassword, UpdateEmail, UpdatePassword
 from core.security.utils import Hash
 from crud import UserCRUD
 from crud.barn_crud import BarnCRUD
@@ -147,3 +147,30 @@ async def update_email(
   )
   await redis.delete(f"cache:user:{username}:profile")
   return {"message": "Email added to the user account."}
+
+
+@router.patch(
+  "/password",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Depends(limit_dependency)],
+)
+async def recover_password(
+  body: Annotated[RecoverPassword, Body()],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Recover the user's password via email."""
+  users_db = mongo.get_database("users")
+
+  user = await UserCRUD(users_db).find(email=body.email)
+  if not user:
+    raise HTTPException(
+      status_code=status.HTTP_404_NOT_FOUND,
+      detail="User with that email not found.",
+    )
+
+  username = user.get("username")
+  await UserCRUD(users_db).update(
+    username=username,
+    update={"password": Hash.hash(plain=body.new_password)},
+  )
+  return {"message": "The user's password has been recovered."}
