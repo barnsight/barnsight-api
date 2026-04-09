@@ -69,7 +69,9 @@ class BarnCRUD(BaseCRUD):
 
     return result
 
-  async def get_cameras_for_zone(self, barn_id: int, zone_id: int, account_id: Optional[str] = None) -> List[dict]:
+  async def get_cameras_for_zone(
+    self, barn_id: int, zone_id: int, account_id: Optional[str] = None
+  ) -> List[dict]:
     """Return all cameras for a given barn and zone, with online status from Redis."""
     from core.database import RedisClient
 
@@ -83,12 +85,12 @@ class BarnCRUD(BaseCRUD):
     redis = RedisClient()
     for cam in cameras:
       cam["_id"] = str(cam["_id"])
-      
+
       # Determine device status from Redis heartbeat
       # If account_id is not provided, we might not be able to construct the key accurately
       # but let's assume we can find it if we have it.
       if account_id:
-        device_id = cam.get("camera_id") # Assuming camera_id is used as device_id
+        device_id = cam.get("camera_id")  # Assuming camera_id is used as device_id
         status_key = f"device:{account_id}:{device_id}:status"
         is_online = await redis.get(status_key)
         cam["status"] = "online" if is_online else "offline"

@@ -55,12 +55,7 @@ class EventCRUD(BaseCRUD):
       except Exception:
         pass  # Handle invalid cursor gracefully
 
-    cursor_obj = (
-      self.db[self.collection_name]
-      .find(query)
-      .sort("_id", DESCENDING)
-      .limit(limit)
-    )
+    cursor_obj = self.db[self.collection_name].find(query).sort("_id", DESCENDING).limit(limit)
     events = await cursor_obj.to_list(length=limit)
 
     # Convert ObjectId to string for response
