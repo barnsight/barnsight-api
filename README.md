@@ -131,8 +131,8 @@ curl -X POST http://localhost:8000/api/v1/events \
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/admin/setup` | Create initial admin account |
-| `POST` | `/admin/register/farmer` | Register a new farmer account |
-| `POST` | `/admin/register/staff` | Register a new staff account |
+| `POST` | `/farmers` | Register a new farmer account |
+| `POST` | `/staff` | Register a new staff account |
 | `GET` | `/admin/dashboard` | System-wide statistics |
 | `PATCH` | `/admin/users/{username}/role` | Change user role |
 
@@ -292,5 +292,8 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 <div align="center">
 
 **Built for the future of farming.**
+
+</div>
+ing.**
 
 </div>
