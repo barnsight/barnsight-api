@@ -7,14 +7,15 @@ or web users (JWT), and event querying with filtering.
 from datetime import datetime
 from typing import Annotated, Optional
 
+import json
 from api.auth_dependencies import validate_api_key
 from api.dependencies import get_jwt_payload, get_mongo_client, limit_dependency
 from core.config import settings
-from core.database import MongoClient
+from core.database import MongoClient, RedisClient
 from core.schemas.events import EventCreate, EventListResponse, EventResponse
 from core.services.cloudinary_service import upload_base64_image
 from crud.event_crud import EventCRUD
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
 router = APIRouter(tags=["Events"])
@@ -56,6 +57,7 @@ async def create_event(
   event: EventCreate,
   owner_id: Annotated[str, Depends(get_event_owner)],
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  background_tasks: BackgroundTasks,
 ):
   """Submit a detection event.
 
@@ -75,6 +77,17 @@ async def create_event(
     event_dict["image_snapshot"] = secure_url
 
   result = await event_crud.create_event(event_dict)
+
+  # Publish to Redis for Real-Time WebSockets
+  redis = RedisClient()
+  channel = f"account:{owner_id}:events"
+  await redis.publish(channel, json.dumps(result, default=str))
+
+  # Trigger alerting background task if confidence is high
+  if result.get("confidence", 0) > 0.8:
+    from core.services.alert_service import check_and_send_alert
+    background_tasks.add_task(check_and_send_alert, owner_id, result)
+
   return result
 
 
@@ -91,28 +104,21 @@ async def get_events(
   device_id: Optional[str] = Query(None, description="Filter by device ID"),
   start_time: Optional[datetime] = Query(None, description="Filter events after this UTC time"),
   end_time: Optional[datetime] = Query(None, description="Filter events before this UTC time"),
-  offset: int = Query(0, ge=0, description="Pagination offset"),
+  cursor: Optional[str] = Query(None, description="Pagination cursor (event _id)"),
   limit: int = Query(100, ge=1, le=1000, description="Pagination limit"),
 ):
   """Query events belonging to the authenticated account."""
   events_db = mongo.get_database("barnsight")
+  event_crud = EventCRUD(events_db)
 
-  query = {"account_id": owner_id}
-  if camera_id:
-    query["camera_id"] = camera_id
-  if device_id:
-    query["device_id"] = device_id
-  if start_time or end_time:
-    query["timestamp"] = {}
-    if start_time:
-      query["timestamp"]["$gte"] = start_time
-    if end_time:
-      query["timestamp"]["$lte"] = end_time
+  events, total, next_cursor = await event_crud.get_events(
+    account_id=owner_id,
+    camera_id=camera_id,
+    device_id=device_id,
+    start_time=start_time,
+    end_time=end_time,
+    cursor=cursor,
+    limit=limit,
+  )
 
-  cursor = events_db["events"].find(query).sort("timestamp", -1).skip(offset).limit(limit)
-  events = await cursor.to_list(length=limit)
-  for e in events:
-    e["_id"] = str(e["_id"])
-  total = await events_db["events"].count_documents(query)
-
-  return {"events": events, "total": total}
+  return {"events": events, "total": total, "next_cursor": next_cursor}

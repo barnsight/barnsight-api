@@ -28,10 +28,12 @@ async def get_barns(
   db = mongo.get_database("barnsight")
   barn_crud = BarnCRUD(db)
 
+  username = user.get("username")
   role = user.get("role", "")
-  barn_ids = await barn_crud.get_barn_ids_for_user(user.get("username"), role)
+  account_id = user.get("sub")
 
-  all_barns = await barn_crud.get_all_barns()
+  barn_ids = await barn_crud.get_barn_ids_for_user(username, role)
+  all_barns = await barn_crud.get_all_barns(account_id=account_id)
 
   if barn_ids is not None:
     all_barns = [b for b in all_barns if b["barn_id"] in barn_ids]
@@ -54,8 +56,11 @@ async def get_barn(
   db = mongo.get_database("barnsight")
   barn_crud = BarnCRUD(db)
 
+  username = user.get("username")
   role = user.get("role", "")
-  barn_ids = await barn_crud.get_barn_ids_for_user(user.get("username"), role)
+  account_id = user.get("sub")
+
+  barn_ids = await barn_crud.get_barn_ids_for_user(username, role)
 
   if barn_ids is not None and barn_id not in barn_ids:
     raise HTTPException(
@@ -63,7 +68,7 @@ async def get_barn(
       detail="Access denied to this barn.",
     )
 
-  barn = await barn_crud.get_barn_by_id(barn_id)
+  barn = await barn_crud.get_barn_by_id(barn_id, account_id=account_id)
   if not barn:
     raise HTTPException(
       status_code=status.HTTP_404_NOT_FOUND,

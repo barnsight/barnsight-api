@@ -25,15 +25,18 @@ class EventCRUD(BaseCRUD):
 
   async def get_events(
     self,
+    account_id: str,
     camera_id: Optional[str] = None,
     device_id: Optional[str] = None,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
-    offset: int = 0,
+    cursor: Optional[str] = None,
     limit: int = 100,
   ):
-    """Reads events with filtering."""
-    query = {}
+    """Reads events with cursor-based filtering."""
+    from bson import ObjectId
+
+    query = {"account_id": account_id}
     if camera_id:
       query["camera_id"] = camera_id
     if device_id:
@@ -46,21 +49,27 @@ class EventCRUD(BaseCRUD):
       if end_time:
         query["timestamp"]["$lte"] = end_time
 
-    cursor = (
+    if cursor:
+      try:
+        query["_id"] = {"$lt": ObjectId(cursor)}
+      except Exception:
+        pass  # Handle invalid cursor gracefully
+
+    cursor_obj = (
       self.db[self.collection_name]
       .find(query)
-      .sort("timestamp", DESCENDING)
-      .skip(offset)
+      .sort("_id", DESCENDING)
       .limit(limit)
     )
-    events = await cursor.to_list(length=limit)
+    events = await cursor_obj.to_list(length=limit)
 
     # Convert ObjectId to string for response
     for event in events:
       event["_id"] = str(event["_id"])
 
+    next_cursor = events[-1]["_id"] if events else None
     total = await self.db[self.collection_name].count_documents(query)
-    return events, total
+    return events, total, next_cursor
 
   async def get_analytics(self):
     """Aggregates basic analytics."""
@@ -83,8 +92,14 @@ class EventCRUD(BaseCRUD):
     }
 
   async def setup_indexes(self):
-    """Creates necessary indexes for the collection."""
-    await self.db[self.collection_name].create_index([("timestamp", DESCENDING)])
+    """Creates necessary indexes for the collection, including TTL."""
+    # TTL Index: expireAfterSeconds = 90 days * 24 hours * 3600 seconds = 7,776,000
+    await self.db[self.collection_name].create_index(
+      [("timestamp", DESCENDING)], expireAfterSeconds=7776000
+    )
+    await self.db[self.collection_name].create_index(
+      [("account_id", ASCENDING), ("_id", DESCENDING)]
+    )
     await self.db[self.collection_name].create_index(
       [("camera_id", ASCENDING), ("timestamp", DESCENDING)]
     )
