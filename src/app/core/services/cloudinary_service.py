@@ -21,6 +21,14 @@ def init_cloudinary():
       api_secret=settings.CLOUDINARY_API_SECRET,
       secure=True,
     )
+
+    # Increase urllib3 connection pool size for concurrent uploads
+    from cloudinary.utils import get_http_connector
+
+    options = cloudinary.CERT_KWARGS.copy()
+    options["maxsize"] = 100
+    cloudinary.uploader._http = get_http_connector(cloudinary.config(), options)
+
     logger.info("Cloudinary configured successfully.")
   else:
     logger.warning("Cloudinary credentials not found. Image uploads may fail.")
