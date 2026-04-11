@@ -13,6 +13,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
       role, jti = payload.get("role"), payload.get("jti")
       request.state.limit_value = settings.RATE_LIMITS.get(role, settings.RATE_LIMIT_ANONYMOUS)
       request.state.identifier = f"{role}:{jti}"
+    elif api_key := request.headers.get("X-API-Key"):
+      request.state.limit_value = settings.RATE_LIMIT_EDGE
+      request.state.identifier = f"edge:{api_key}"
     else:
       request.state.limit_value = settings.RATE_LIMIT_ANONYMOUS
       request.state.identifier = f"anonymous:{get_remote_address(request)}"
