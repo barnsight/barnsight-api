@@ -56,6 +56,10 @@ class Settings(BaseSettings):
   # API version
   API_V1_STR: str = "/api/v1"
 
+  # Direct URI overrides for cloud deployments (e.g., Render)
+  MONGO_URI_OVERRIDE: Optional[str] = None
+  REDIS_URL: Optional[str] = None
+
   # MongoDB settings
   MONGO_HOSTNAME: str = "localhost"
   MONGO_PORT: int = 27017
@@ -71,7 +75,15 @@ class Settings(BaseSettings):
   @property
   def MONGO_URI(self) -> str:
     """Build MongoDB URI from settings, supporting both Atlas and local."""
-    return f"mongodb+srv://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/nosql?authSource=admin"
+    if self.MONGO_URI_OVERRIDE:
+      return self.MONGO_URI_OVERRIDE
+
+    scheme = "mongodb"
+    if "." in self.MONGO_HOSTNAME and "mongodb.net" in self.MONGO_HOSTNAME:
+      scheme = "mongodb+srv"
+      return f"{scheme}://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/nosql?authSource=admin"
+    
+    return f"{scheme}://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/nosql?authSource=admin"
 
   # Redis settings
   REDIS_HOST: str = "localhost"
@@ -132,7 +144,9 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Build Redis URI based on auth configuration
-if settings.REDIS_USERNAME or settings.REDIS_PASSWORD:
+if settings.REDIS_URL:
+  REDIS_URI = settings.REDIS_URL
+elif settings.REDIS_USERNAME or settings.REDIS_PASSWORD:
   REDIS_URI = f"redis://{settings.REDIS_USERNAME}:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
 else:
   REDIS_URI = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
