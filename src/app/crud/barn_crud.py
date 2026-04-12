@@ -194,7 +194,7 @@ class BarnCRUD(BaseCRUD):
       {"$sort": {"_id": ASCENDING}},
     ]
 
-    daily_cursor = events_db["events"].aggregate(daily_pipeline)
+    daily_cursor = await events_db["events"].aggregate(daily_pipeline)
     daily_results = await daily_cursor.to_list(length=None)
     daily_summary = [{"date": d["_id"], "detections": d["count"]} for d in daily_results]
 
@@ -204,7 +204,7 @@ class BarnCRUD(BaseCRUD):
       {"$sort": {"count": DESCENDING}},
     ]
 
-    zone_cursor = events_db["events"].aggregate(zone_pipeline)
+    zone_cursor = await events_db["events"].aggregate(zone_pipeline)
     zone_results = await zone_cursor.to_list(length=None)
     high_risk_count = max(1, len(zone_results) // 3)
     high_risk_zones = [f"Zone {r['_id']}" for r in zone_results[:high_risk_count]]
@@ -252,15 +252,16 @@ class BarnCRUD(BaseCRUD):
       {"$match": query},
       {"$group": {"_id": None, "avg_confidence": {"$avg": "$confidence"}}},
     ]
-    avg_cursor = events_db["events"].aggregate(avg_pipeline)
+    avg_cursor = await events_db["events"].aggregate(avg_pipeline)
     avg_results = await avg_cursor.to_list(length=None)
-    average_confidence = round(avg_results[0]["avg_confidence"], 2) if avg_results else 0.0
+    avg_conf = avg_results[0].get("avg_confidence") if avg_results else None
+    average_confidence = round(avg_conf, 2) if avg_conf is not None else 0.0
 
     barn_pipeline = [
       {"$match": query},
       {"$group": {"_id": "$account_id", "count": {"$sum": 1}}},
     ]
-    barn_cursor = events_db["events"].aggregate(barn_pipeline)
+    barn_cursor = await events_db["events"].aggregate(barn_pipeline)
     barn_results = await barn_cursor.to_list(length=None)
     detections_per_barn = {f"Barn {r['_id']}": r["count"] for r in barn_results if r["_id"]}
 

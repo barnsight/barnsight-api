@@ -63,3 +63,4 @@ async def get_analytics(
     }
 
   return analytics_data
+
