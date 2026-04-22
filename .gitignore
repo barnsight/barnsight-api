@@ -204,6 +204,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Accidental one-character file that previously held secrets.
+\\
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
