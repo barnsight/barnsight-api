@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Annotated, Optional
 
 from api.auth_dependencies import validate_api_key
-from api.dependencies import get_jwt_payload, get_mongo_client, limit_dependency
+from api.dependencies import get_jwt_payload, get_mongo_client, get_redis_client, limit_dependency
 from core.config import settings
 from core.database import MongoClient, RedisClient
 from core.schemas.events import EventCreate, EventListResponse, EventResponse
@@ -57,6 +57,7 @@ async def create_event(
   event: EventCreate,
   owner_id: Annotated[str, Depends(get_event_owner)],
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  redis: Annotated[RedisClient, Depends(get_redis_client)],
   background_tasks: BackgroundTasks,
 ):
   """Submit a detection event.
@@ -70,6 +71,11 @@ async def create_event(
   event_dict = event.model_dump()
   event_dict["account_id"] = owner_id
 
+  if event.event_id:
+    existing = await event_crud.get_event_by_event_id(owner_id, event.event_id)
+    if existing:
+      return existing
+
   # Upload image to Cloudinary if provided
   if event.image_snapshot:
     folder = f"barnsight/manure/{owner_id}"
@@ -79,7 +85,6 @@ async def create_event(
   result = await event_crud.create_event(event_dict)
 
   # Publish to Redis for Real-Time WebSockets
-  redis = RedisClient()
   channel = f"account:{owner_id}:events"
   await redis.publish(channel, json.dumps(result, default=str))
 
@@ -103,6 +108,8 @@ async def get_events(
   mongo: Annotated[MongoClient, Depends(get_mongo_client)],
   camera_id: Optional[str] = Query(None, description="Filter by camera ID"),
   device_id: Optional[str] = Query(None, description="Filter by device ID"),
+  barn_id: Optional[str] = Query(None, description="Filter by barn ID"),
+  zone_id: Optional[str] = Query(None, description="Filter by zone ID"),
   start_time: Optional[datetime] = Query(None, description="Filter events after this UTC time"),
   end_time: Optional[datetime] = Query(None, description="Filter events before this UTC time"),
   cursor: Optional[str] = Query(None, description="Pagination cursor (event _id)"),
@@ -116,6 +123,8 @@ async def get_events(
     account_id=owner_id,
     camera_id=camera_id,
     device_id=device_id,
+    barn_id=barn_id,
+    zone_id=zone_id,
     start_time=start_time,
     end_time=end_time,
     cursor=cursor,

@@ -9,6 +9,7 @@ from api.dependencies import get_current_user, get_mongo_client, limit_dependenc
 from core.database import MongoClient
 from core.schemas.barns import BarnListResponse, BarnResponse
 from crud.barn_crud import BarnCRUD
+from crud.event_crud import EventCRUD
 from fastapi import APIRouter, Depends, HTTPException, status
 
 router = APIRouter(tags=["Barns"])
@@ -76,3 +77,52 @@ async def get_barn(
     )
 
   return barn
+
+
+def _account_id_from_user(user: dict) -> str | None:
+  return user.get("sub") or user.get("username")
+
+
+@router.get("/{barn_id}/devices", dependencies=[Depends(limit_dependency)])
+async def get_barn_devices(
+  barn_id: str,
+  user: Annotated[dict, Depends(get_current_user)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """List devices for one barn scoped to the authenticated account."""
+  db = mongo.get_database("barnsight")
+  query = {"account_id": _account_id_from_user(user), "barn_id": barn_id}
+  cursor = db["devices"].find(query)
+  devices = await cursor.to_list(length=None)
+  for device in devices:
+    device["_id"] = str(device["_id"])
+  return {"devices": devices}
+
+
+@router.get("/{barn_id}/cameras", dependencies=[Depends(limit_dependency)])
+async def get_barn_cameras(
+  barn_id: str,
+  user: Annotated[dict, Depends(get_current_user)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """List cameras for one barn scoped to the authenticated account."""
+  db = mongo.get_database("barnsight")
+  query = {"account_id": _account_id_from_user(user), "barn_id": barn_id}
+  cursor = db["cameras"].find(query)
+  cameras = await cursor.to_list(length=None)
+  for camera in cameras:
+    camera["_id"] = str(camera["_id"])
+  return {"cameras": cameras}
+
+
+@router.get("/{barn_id}/hygiene-summary", dependencies=[Depends(limit_dependency)])
+async def get_barn_hygiene_summary(
+  barn_id: str,
+  user: Annotated[dict, Depends(get_current_user)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Return a barn-scoped hygiene analytics summary."""
+  db = mongo.get_database("barnsight")
+  account_id = _account_id_from_user(user)
+  analytics = await EventCRUD(db).get_analytics(account_id=account_id, barn_id=barn_id)
+  return analytics

@@ -12,8 +12,10 @@ from core.database import MongoClient, RedisClient
 from core.errors import rate_limit_exceeded_handler
 from core.middleware import RateLimitMiddleware
 from core.services.cloudinary_service import init_cloudinary
+from crud.event_crud import EventCRUD
 from fastapi import FastAPI
 from prometheus_fastapi_instrumentator import Instrumentator
+from pymongo import ASCENDING
 from slowapi.errors import RateLimitExceeded
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -25,6 +27,25 @@ async def lifespan(app: FastAPI):
   await RedisClient.connect()
   await MongoClient.connect()
   init_cloudinary()
+  if MongoClient._client:
+    db = MongoClient._client.get_database("barnsight")
+    await EventCRUD(db).setup_indexes()
+    await db["devices"].create_index(
+      [("account_id", ASCENDING), ("device_id", ASCENDING)], unique=True
+    )
+    await db["devices"].create_index([("account_id", ASCENDING), ("barn_id", ASCENDING)])
+    await db["cameras"].create_index(
+      [("account_id", ASCENDING), ("camera_id", ASCENDING)], unique=True
+    )
+    await db["cameras"].create_index([("account_id", ASCENDING), ("device_id", ASCENDING)])
+    await db["cameras"].create_index([("account_id", ASCENDING), ("barn_id", ASCENDING)])
+    await db["device_configs"].create_index(
+      [("account_id", ASCENDING), ("device_id", ASCENDING)], unique=True
+    )
+    await db["detection_zones"].create_index(
+      [("account_id", ASCENDING), ("camera_id", ASCENDING), ("zone_id", ASCENDING)], unique=True
+    )
+    await db["detection_zones"].create_index([("account_id", ASCENDING), ("camera_id", ASCENDING)])
   try:
     yield
   finally:

@@ -34,6 +34,7 @@ def mock_mongo_client():
           coll.delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
           coll.find_one_and_update = AsyncMock(return_value=None)
           coll.count_documents = AsyncMock(return_value=0)
+          coll.create_index = AsyncMock(return_value="idx")
 
           mock_cursor = MagicMock()
           mock_cursor.to_list = AsyncMock(return_value=[])
@@ -42,6 +43,7 @@ def mock_mongo_client():
           mock_cursor.skip.return_value = mock_cursor
           mock_cursor.limit.return_value = mock_cursor
           coll.find.return_value = mock_cursor
+          coll.aggregate.return_value = mock_cursor
           collections[coll_name] = coll
         return collections[coll_name]
 
@@ -83,7 +85,17 @@ def mock_redis_client():
   mock_redis.get.return_value = None
   mock_redis.setex.return_value = None
   mock_redis.delete.return_value = None
-  return mock_redis
+  mock_redis.publish.return_value = None
+  mock_redis.incr.return_value = 1
+  mock_redis.expire.return_value = None
+
+  from core.database import RedisClient
+
+  RedisClient._client = mock_redis
+  RedisClient.connect = AsyncMock(return_value=RedisClient._instance)
+  RedisClient.close = AsyncMock()
+  yield mock_redis
+  RedisClient._client = None
 
 
 @pytest.fixture

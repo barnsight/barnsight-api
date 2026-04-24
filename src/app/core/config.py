@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     if "." in self.MONGO_HOSTNAME and "mongodb.net" in self.MONGO_HOSTNAME:
       scheme = "mongodb+srv"
       return f"{scheme}://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}/nosql?authSource=admin"
-    
+
     return f"{scheme}://{self.MONGO_USERNAME}:{self.MONGO_PASSWORD}@{self.MONGO_HOSTNAME}:{self.MONGO_PORT}/nosql?authSource=admin"
 
   # Redis settings
@@ -108,6 +108,10 @@ class Settings(BaseSettings):
   CLOUDINARY_CLOUD_NAME: Optional[str] = None
   CLOUDINARY_API_KEY: Optional[str] = None
   CLOUDINARY_API_SECRET: Optional[str] = None
+
+  # Edge device ingestion and status settings
+  EDGE_MAX_SNAPSHOT_BYTES: int = 2_000_000
+  DEVICE_HEARTBEAT_TTL_SECONDS: int = 300
 
   # Session secret — must be set in production
   SECRET_KEY: str = secrets.token_urlsafe(32)

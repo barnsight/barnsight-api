@@ -6,6 +6,7 @@ from .routers import (
   api_keys,
   auth,
   barns,
+  cameras,
   detections,
   devices,
   events,
@@ -34,6 +35,7 @@ api_v1_router.include_router(staff.router, prefix="/staff")
 api_v1_router.include_router(events.router, prefix="/events")
 api_v1_router.include_router(ws.router, prefix="/ws")
 api_v1_router.include_router(devices.router, prefix="/devices")
+api_v1_router.include_router(cameras.router, prefix="/cameras")
 api_v1_router.include_router(analytics.router, prefix="/analytics")
 api_v1_router.include_router(api_keys.router, prefix="/api-keys")
 api_v1_router.include_router(barns.router, prefix="/barns")

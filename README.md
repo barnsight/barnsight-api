@@ -91,7 +91,15 @@ All endpoints are prefixed with `/api/v1`.
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/events` | Submit a detection event |
-| `GET` | `/events` | Query events (filter by camera, device, time range) |
+| `GET` | `/events` | Query events filtered by barn, device, camera, zone, and time range |
+| `POST` | `/devices` | Register/update a physical edge host |
+| `GET` | `/devices` | List physical edge hosts |
+| `POST` | `/devices/{device_id}/cameras` | Register/update a camera stream on a device |
+| `GET` | `/devices/{device_id}/cameras` | List cameras attached to a device |
+| `POST` | `/devices/heartbeat` | Persist the latest structured heartbeat and refresh online TTL |
+| `GET` | `/devices/{device_id}/config` | Fetch remote edge configuration |
+| `GET` | `/cameras/{camera_id}/status` | Fetch camera online/offline status |
+| `GET` | `/cameras/{camera_id}/zones` | Fetch camera-scoped floor zones |
 
 **Example — Submit event:**
 
@@ -108,6 +116,91 @@ curl -X POST http://localhost:8000/api/v1/events \
     "image_snapshot": "base64_encoded_image_data..."
   }'
 ```
+
+### Edge Event Contract
+
+BarnSight runs one edge worker/container per camera. Multiple camera workers on the same physical host share the same `device_id`; every stream has a unique `camera_id`. `POST /api/v1/events` accepts `X-API-Key` or JWT auth. Required fields are `timestamp`, `device_id`, `camera_id`, `confidence`, and `bounding_box`. Optional production edge metadata: `event_id`, `barn_id`, `zone_id`, `image_snapshot`, `model_version`, `model_path`, `img_size`, `threshold`, `snapshot_mode`, `edge_app_version`, and `queue_latency_seconds`.
+
+Validation rules:
+- `confidence` and `threshold` must be between `0.0` and `1.0`.
+- `bounding_box.width` and `bounding_box.height` must be positive.
+- `image_snapshot` must be valid base64 and decode under `EDGE_MAX_SNAPSHOT_BYTES`.
+- `event_id` is an account-scoped idempotency key; retries with the same `event_id` return the existing event.
+- Raw base64 snapshots are replaced with the Cloudinary URL after upload.
+
+### Heartbeat Contract
+
+`POST /api/v1/devices/heartbeat` requires `X-API-Key` and stores the latest state in
+`barnsight.devices` and `barnsight.cameras`. Redis stores `camera:{account_id}:{camera_id}:status` and `device:{account_id}:{device_id}:status` with `DEVICE_HEARTBEAT_TTL_SECONDS`.
+If a camera key expires, that camera is offline. A physical device is offline when none of its cameras have live heartbeat keys.
+
+Supported heartbeat fields: `device_id`, `camera_id`, `status`, `edge_app_version`,
+`model_version`, `model_path`, `camera_connected`, `model_loaded`, `last_frame_at`,
+`last_detection_at`, `fps`, `inference_fps`, `queue_size`, `queue_max_size`,
+`queue_dropped_count`, `memory_used_mb`, `disk_free_mb`, `temperature_c`,
+`uptime_seconds`, and `errors`.
+
+Device status endpoints:
+- `GET /api/v1/devices`
+- `GET /api/v1/devices/{device_id}`
+- `GET /api/v1/devices/{device_id}/status`
+- `GET /api/v1/devices/{device_id}/cameras`
+- `GET /api/v1/cameras/{camera_id}`
+- `GET /api/v1/cameras/{camera_id}/status`
+
+### Device Config Contract
+
+Remote configuration is account scoped:
+- `GET /api/v1/devices/{device_id}/config`
+- `PUT /api/v1/devices/{device_id}/config`
+
+Fields: `enabled`, `inference_fps`, `img_size`, `min_confidence`, `cooldown_seconds`,
+`image_cooldown_seconds`, `region_overlap_threshold`, `jpeg_quality`,
+`send_image_snapshot`, `snapshot_mode`, `max_image_bytes`, `detection_zones`, and
+`updated_at`. Validation is strict: unknown fields are rejected and numeric ranges are bounded.
+
+### Detection Zones
+
+Detection zones define barn floor masks for edge cameras. Each zone stores `zone_id`,
+`barn_id`, `device_id`, `camera_id`, normalized polygon points, `enabled`, and `label`.
+Zones are camera-specific because each camera has a different floor perspective.
+
+Endpoints:
+- `GET /api/v1/cameras/{camera_id}/zones`
+- `POST /api/v1/cameras/{camera_id}/zones`
+- `PUT /api/v1/cameras/{camera_id}/zones/{zone_id}`
+- `DELETE /api/v1/cameras/{camera_id}/zones/{zone_id}`
+
+### Barn, Device, Camera Model
+
+- Barn: physical facility area.
+- Device: physical edge host/gateway installed at a barn.
+- Camera: one RTSP/USB stream attached to a device.
+- Zone: optional polygon/floor area for one camera view.
+- Event: contamination detection produced by one camera worker.
+
+Do not store RTSP credentials in this API. Store only redacted stream labels such as `north-aisle-main` or `rtsp-redacted-a`.
+
+### Security Expectations
+
+- Use `X-API-Key` for edge devices; API keys are hashed at rest.
+- Do not send API keys in query strings or logs.
+- Use HTTPS/TLS in production and rotate keys when devices are replaced.
+- Keep `EDGE_MAX_SNAPSHOT_BYTES` below the ingress/proxy body limit.
+- Use account scoping for every query and write.
+- Do not store raw base64 image payloads after Cloudinary upload.
+
+### Recommended Production Settings
+
+Set durable `PRIVATE_KEY_PEM`, `PUBLIC_KEY_PEM`, `SECRET_KEY`, MongoDB credentials,
+Redis credentials, and Cloudinary credentials. Recommended edge-specific settings:
+
+| Variable | Recommended starting point |
+|---|---|
+| `EDGE_MAX_SNAPSHOT_BYTES` | `2000000` |
+| `DEVICE_HEARTBEAT_TTL_SECONDS` | `300` |
+| `RATE_LIMIT_EDGE` | `1000/minute` or higher per farm size |
+| Reverse proxy body limit | Slightly above `EDGE_MAX_SNAPSHOT_BYTES` plus JSON overhead |
 
 ### Web User Endpoints (JWT auth)
 
@@ -171,6 +264,8 @@ All settings are loaded from `.env`. See `.env.example` for the full template.
 | `RATE_LIMIT_EDGE` | `1000/minute` | Rate limit for edge device API keys |
 | `RATE_LIMIT_USER` | `300/minute` | Rate limit for authenticated web users |
 | `CACHE_EXPIRE_MINUTES` | `60` | Redis cache TTL for user profiles |
+| `EDGE_MAX_SNAPSHOT_BYTES` | `2000000` | Maximum decoded base64 snapshot accepted before upload |
+| `DEVICE_HEARTBEAT_TTL_SECONDS` | `300` | Redis TTL used to determine device online/offline status |
 
 ---
 
@@ -203,14 +298,14 @@ Edge Devices (barnsight-edge)
 | Database | Collections | Purpose |
 |---|---|---|
 | `users` | `admins`, `farmers`, `staff`, `edge`, `api_keys`, `user_barns` | User accounts, API keys, barn assignments |
-| `barnsight` | `barns`, `zones`, `devices`, `events` | Farm infrastructure and detection events |
+| `barnsight` | `barns`, `zones`, `devices`, `cameras`, `events`, `device_configs`, `detection_zones` | Farm infrastructure, edge status/config, floor masks, and detection events |
 
-### Database Structure
-
-| Database | Collections | Purpose |
-|---|---|---|
-| `users` | `admins`, `farmers`, `staff`, `edge`, `api_keys`, `user_barns` | User accounts, API keys, barn assignments |
-| `barnsight` | `barns`, `zones`, `devices`, `events` | Farm infrastructure and detection events |
+Required production indexes include:
+- `events`: `account_id + event_id` unique when `event_id` exists.
+- `events`: `account_id + timestamp`, `account_id + barn_id + timestamp`, `account_id + device_id + timestamp`, `account_id + camera_id + timestamp`, `account_id + barn_id + zone_id + timestamp`.
+- `devices`: `account_id + device_id` unique.
+- `cameras`: `account_id + camera_id` unique and `account_id + device_id`.
+- `detection_zones`: `account_id + camera_id + zone_id` unique.
 
 ### Project Structure
 
