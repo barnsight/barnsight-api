@@ -40,9 +40,6 @@ async def lifespan(app: FastAPI):
     await users_db["api_keys"].create_index([("farm_id", ASCENDING), ("status", ASCENDING)])
     await users_db["audit_logs"].create_index([("created_at", ASCENDING)])
     await EventCRUD(db).setup_indexes()
-    await db["farms"].create_index([("account_id", ASCENDING), ("farm_id", ASCENDING)], unique=True)
-    await db["barns"].create_index([("account_id", ASCENDING), ("barn_id", ASCENDING)], unique=True)
-    await db["reports"].create_index([("account_id", ASCENDING), ("created_at", ASCENDING)])
     await db["audit_logs"].create_index([("created_at", ASCENDING)])
     await db["devices"].create_index(
       [("account_id", ASCENDING), ("device_id", ASCENDING)], unique=True

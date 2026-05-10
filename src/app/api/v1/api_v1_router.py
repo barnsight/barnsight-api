@@ -8,11 +8,9 @@ from .routers import (
   edge,
   events,
   farmers,
-  farms,
   google_auth,
   health,
   staff,
-  system,
   user,
   users,
   ws,
@@ -29,7 +27,6 @@ api_v1_router.include_router(user.router, prefix="/user")
 api_v1_router.include_router(user.router)
 api_v1_router.include_router(users.router, prefix="/users")
 api_v1_router.include_router(admin.router, prefix="/admin")
-api_v1_router.include_router(farms.router, prefix="/farms")
 api_v1_router.include_router(farmers.router, prefix="/farmers")
 api_v1_router.include_router(staff.router, prefix="/staff")
 api_v1_router.include_router(events.router, prefix="/events")
@@ -37,4 +34,3 @@ api_v1_router.include_router(ws.router, prefix="/ws")
 api_v1_router.include_router(edge.router, prefix="/edge")
 api_v1_router.include_router(api_keys.router, prefix="/api-keys")
 api_v1_router.include_router(detections.router, prefix="/detections")
-api_v1_router.include_router(system.router, prefix="/system")

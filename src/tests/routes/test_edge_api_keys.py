@@ -131,6 +131,25 @@ async def test_validate_key_accepts_legacy_prefix_and_trimmed_key(mock_mongo_cli
   )
 
 
+@pytest.mark.asyncio
+async def test_validate_key_defaults_legacy_scopes_for_edge_devices(mock_mongo_client):
+  raw_key = "bs_live_test_secret"
+  users_db = mock_mongo_client.get_database("users")
+  cursor = MagicMock()
+  legacy_doc = _edge_key_doc(raw_key)
+  legacy_doc.pop("scopes")
+  cursor.to_list = AsyncMock(return_value=[legacy_doc])
+  users_db["api_keys"].find.return_value = cursor
+
+  key_doc = await ApiKeyCRUD(users_db).validate_key(
+    raw_key, required_scope="edge:event:create", ip="127.0.0.1"
+  )
+
+  assert key_doc is not None
+  assert "edge:event:create" in key_doc["scopes"]
+  users_db["api_keys"].update_one.assert_called_once()
+
+
 def test_edge_event_uses_key_scope_and_associations(client, mock_mongo_client):
   raw_key = "bs_live_edge_secret"
   users_db = mock_mongo_client.get_database("users")

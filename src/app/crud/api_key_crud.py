@@ -61,7 +61,7 @@ class ApiKeyCRUD(BaseCRUD):
       "farm_id": farm_id,
       "barn_id": doc.get("barn_id"),
       "device_id": doc.get("device_id"),
-      "scopes": doc.get("scopes") or self.default_edge_scopes,
+      "scopes": self._normalized_scopes(doc),
       "status": status,
       "created_by_user_id": doc.get("created_by_user_id"),
       "created_at": created_at,
@@ -70,6 +70,12 @@ class ApiKeyCRUD(BaseCRUD):
       "last_used_ip": doc.get("last_used_ip"),
       "revoked_at": doc.get("revoked_at"),
     }
+
+  def _normalized_scopes(self, doc: dict) -> list[str]:
+    scopes = doc.get("scopes")
+    if scopes:
+      return scopes
+    return list(self.default_edge_scopes)
 
   def _object_id(self, key_id: str) -> ObjectId:
     try:
@@ -160,7 +166,8 @@ class ApiKeyCRUD(BaseCRUD):
         expires_at = expires_at.replace(tzinfo=timezone.utc)
       expired = bool(expires_at and expires_at <= now)
       active = key_doc.get("status", "active") == "active" and not expired
-      has_scope = required_scope is None or required_scope in key_doc.get("scopes", [])
+      scopes = self._normalized_scopes(key_doc)
+      has_scope = required_scope is None or required_scope in scopes
       if not active or not has_scope:
         if expired:
           await self.db[self.collection_name].update_one(
@@ -172,8 +179,10 @@ class ApiKeyCRUD(BaseCRUD):
         )
         return None
       await self.db[self.collection_name].update_one(
-        {"_id": key_doc["_id"]}, {"$set": {"last_used_at": now, "last_used_ip": ip}}
+        {"_id": key_doc["_id"]},
+        {"$set": {"last_used_at": now, "last_used_ip": ip, "scopes": scopes}},
       )
+      key_doc["scopes"] = scopes
       key_doc["last_used_at"] = now
       key_doc["last_used_ip"] = ip
       return self._serialize(key_doc)

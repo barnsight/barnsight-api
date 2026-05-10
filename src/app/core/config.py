@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
   # App settings
   NAME: str = "BarnSight API"
-  DESCRIPTION: str = "Central ingestion and analytics server for BarnSight farm hygiene monitoring"
+  DESCRIPTION: str = "Central ingestion and edge device API for BarnSight hygiene monitoring"
   SUMMARY: str = "BarnSight API"
   VERSION: str = "0.1.0"
 
