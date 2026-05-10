@@ -233,7 +233,8 @@ def test_create_event_publishes_to_redis(client, mock_mongo_client, mock_redis_c
   }
 
   with patch(
-    "core.services.cloudinary_service.upload_base64_image", return_value="http://image.url"
+    "core.services.cloudinary_service.upload_base64_image",
+    return_value="https://example.invalid/snapshots/test-event.jpg",
   ):
     response = client.post("/api/v1/events", json=event_data)
 

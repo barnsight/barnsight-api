@@ -14,7 +14,7 @@ class BoundingBox(BaseModel):
   height: float = Field(..., gt=0, description="Height of the bounding box")
 
 
-class EventCreate(BaseModel):
+class EventBase(BaseModel):
   model_config = ConfigDict(extra="forbid")
 
   timestamp: datetime = Field(..., description="UTC timestamp of the detection")
@@ -33,6 +33,10 @@ class EventCreate(BaseModel):
   snapshot_mode: Optional[Literal["none", "on_detection", "always", "throttled"]] = None
   edge_app_version: Optional[str] = None
   queue_latency_seconds: Optional[float] = Field(None, ge=0)
+
+
+class EventCreate(EventBase):
+  image_snapshot: Optional[str] = Field(None, description="Base64 encoded image snapshot")
 
   @field_validator("image_snapshot")
   @classmethod
@@ -57,7 +61,10 @@ class EventCreate(BaseModel):
     return value
 
 
-class EventResponse(EventCreate):
+class EventResponse(EventBase):
+  image_snapshot: Optional[str] = Field(
+    None, description="Stored image snapshot reference, usually a Cloudinary URL"
+  )
   id: str = Field(..., alias="_id", description="Event ID")
 
   model_config = ConfigDict(populate_by_name=True, extra="allow")

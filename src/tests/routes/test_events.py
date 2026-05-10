@@ -174,6 +174,7 @@ def test_get_events(client, mock_mongo_client):
       "device_id": "edge_01",
       "confidence": 0.87,
       "bounding_box": {"x": 10, "y": 10, "width": 50, "height": 50},
+      "image_snapshot": "https://example.invalid/snapshots/test-event.jpg",
     }
   ]
 
@@ -192,6 +193,7 @@ def test_get_events(client, mock_mongo_client):
   assert data["total"] == 1
   assert len(data["events"]) == 1
   assert data["events"][0]["camera_id"] == "cam_01"
+  assert data["events"][0]["image_snapshot"] == "https://example.invalid/snapshots/test-event.jpg"
 
 
 def test_get_analytics(authorized_client, mock_mongo_client):
