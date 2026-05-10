@@ -18,4 +18,3 @@ class AdminCreate(UserName):
   role: str = "admins"
   scopes: List[str] = ["admin"]
   account_date: Optional[datetime] = Field(default_factory=datetime.utcnow)
-  account_date: Optional[datetime] = Field(default_factory=datetime.utcnow)

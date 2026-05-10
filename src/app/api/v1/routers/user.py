@@ -150,6 +150,54 @@ async def update_email(
 
 
 @router.patch(
+  "/me/email",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Depends(limit_dependency)],
+)
+async def update_my_email(
+  user_update: Annotated[UpdateEmail, Body()],
+  user: Annotated[dict, Depends(get_current_user)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  redis: Annotated[RedisClient, Depends(get_redis_client)],
+):
+  return await update_email(user_update=user_update, user=user, mongo=mongo, redis=redis)
+
+
+@router.get(
+  "/me/sessions",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Depends(limit_dependency)],
+)
+async def list_sessions(
+  user: Annotated[dict, Depends(get_current_user)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("users")
+  cursor = db["sessions"].find({"username": user.get("username")}).sort("created_at", -1)
+  sessions = await cursor.to_list(length=100)
+  for session in sessions:
+    session["_id"] = str(session["_id"])
+  return {"sessions": sessions}
+
+
+@router.delete(
+  "/me/sessions/{session_id}",
+  status_code=status.HTTP_204_NO_CONTENT,
+  dependencies=[Depends(limit_dependency)],
+)
+async def delete_session(
+  session_id: str,
+  user: Annotated[dict, Depends(get_current_user)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("users")
+  result = await db["sessions"].delete_one({"_id": session_id, "username": user.get("username")})
+  if result.deleted_count == 0:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+  return None
+
+
+@router.patch(
   "/password",
   status_code=status.HTTP_200_OK,
   dependencies=[Depends(limit_dependency)],

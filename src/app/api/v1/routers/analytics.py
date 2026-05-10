@@ -86,3 +86,80 @@ async def get_analytics(
   }
 
   return analytics_data
+
+
+@router.get("/overview", status_code=status.HTTP_200_OK, dependencies=[Depends(limit_dependency)])
+async def analytics_overview(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  return await get_analytics(mongo=mongo, user=user)
+
+
+@router.get("/events-over-time", dependencies=[Depends(limit_dependency)])
+async def events_over_time(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  data = await get_analytics(mongo=mongo, user=user)
+  return {"daily_trends": data["daily_trends"], "hourly_trends": data["hourly_trends"]}
+
+
+@router.get("/confidence", dependencies=[Depends(limit_dependency)])
+async def confidence_analytics(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  data = await get_analytics(mongo=mongo, user=user)
+  return {"average_confidence": data["average_confidence"]}
+
+
+@router.get("/barns", dependencies=[Depends(limit_dependency)])
+async def barn_analytics(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  data = await get_analytics(mongo=mongo, user=user)
+  return {"detections_per_barn": data["detections_per_barn"]}
+
+
+@router.get("/cameras", dependencies=[Depends(limit_dependency)])
+async def camera_analytics(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  data = await get_analytics(mongo=mongo, user=user)
+  return {"detections_per_camera": data["detections_per_camera"]}
+
+
+@router.get("/zones", dependencies=[Depends(limit_dependency)])
+async def zone_analytics(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  data = await get_analytics(mongo=mongo, user=user)
+  return {"detections_per_zone": data["detections_per_zone"]}
+
+
+@router.get("/risk-score", dependencies=[Depends(limit_dependency)])
+async def risk_score(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  data = await get_analytics(mongo=mongo, user=user)
+  score = min(100, data["total_detections"] * 2 + int(data["average_confidence"] * 30))
+  return {"risk_score": score, "trend": data["trend"]}
+
+
+@router.get("/false-positive-rate", dependencies=[Depends(limit_dependency)])
+async def false_positive_rate(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  user: Annotated[dict, Depends(get_current_user)],
+):
+  db = mongo.get_database("barnsight")
+  role = user.get("role", "")
+  account_id = user.get("username") if role != "admins" else None
+  query = {} if account_id is None else {"account_id": account_id}
+  total = await db["events"].count_documents(query)
+  false_positive = await db["events"].count_documents({**query, "status": "false_positive"})
+  return {"false_positive_rate": false_positive / total if total else 0.0}

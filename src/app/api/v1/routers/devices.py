@@ -19,6 +19,7 @@ from core.schemas.devices import (
   DeviceHeartbeat,
   DeviceResponse,
   DeviceStatusResponse,
+  DeviceUpdate,
 )
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer
@@ -171,6 +172,58 @@ async def list_devices(
     _serialize_id(device)
     device["online"] = await _device_online(owner_id, device["device_id"], db)
   return devices
+
+
+@router.patch(
+  "/{device_id}",
+  response_model=DeviceResponse,
+  dependencies=[Depends(limit_dependency)],
+)
+async def update_device(
+  device_id: str,
+  device: DeviceUpdate,
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Update an edge device record."""
+  db = mongo.get_database("barnsight")
+  update = device.model_dump(exclude_none=True)
+  if not update:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No updates supplied")
+  update["updated_at"] = _now()
+  result = await db["devices"].update_one(
+    {"account_id": owner_id, "device_id": device_id}, {"$set": update}
+  )
+  if result.modified_count == 0:
+    existing = await db["devices"].find_one({"account_id": owner_id, "device_id": device_id})
+    if not existing:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+  saved = await db["devices"].find_one({"account_id": owner_id, "device_id": device_id})
+  saved = _serialize_id(saved)
+  saved["online"] = await _device_online(owner_id, device_id, db)
+  return saved
+
+
+@router.delete(
+  "/{device_id}",
+  status_code=status.HTTP_204_NO_CONTENT,
+  dependencies=[Depends(limit_dependency)],
+)
+async def delete_device(
+  device_id: str,
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Delete a device and detach its cameras from active use."""
+  db = mongo.get_database("barnsight")
+  result = await db["devices"].delete_one({"account_id": owner_id, "device_id": device_id})
+  if result.deleted_count == 0:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+  await db["cameras"].update_many(
+    {"account_id": owner_id, "device_id": device_id},
+    {"$set": {"status": "offline", "updated_at": _now()}},
+  )
+  return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -470,3 +523,52 @@ async def put_device_config(
   )
   saved = await db["device_configs"].find_one({"account_id": owner_id, "device_id": device_id})
   return _serialize_id(saved) or config_data
+
+
+@router.post(
+  "/{device_id}/rotate-secret",
+  dependencies=[Depends(limit_dependency)],
+)
+async def rotate_device_secret(
+  device_id: str,
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """Rotate a device-local secret used outside API key ingestion."""
+  import secrets
+
+  db = mongo.get_database("barnsight")
+  secret_value = f"dev_{secrets.token_urlsafe(32)}"
+  result = await db["devices"].update_one(
+    {"account_id": owner_id, "device_id": device_id},
+    {"$set": {"secret_prefix": secret_value[:12], "updated_at": _now()}},
+  )
+  if result.modified_count == 0:
+    existing = await db["devices"].find_one({"account_id": owner_id, "device_id": device_id})
+    if not existing:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+  return {"device_id": device_id, "secret": secret_value, "prefix": secret_value[:12]}
+
+
+@router.get(
+  "/{device_id}/logs",
+  dependencies=[Depends(limit_dependency)],
+)
+async def get_device_logs(
+  device_id: str,
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  limit: int = Query(100, ge=1, le=1000),
+):
+  """Return recent ingestion and device logs."""
+  db = mongo.get_database("barnsight")
+  cursor = (
+    db["device_logs"]
+    .find({"account_id": owner_id, "device_id": device_id})
+    .sort("created_at", -1)
+    .limit(limit)
+  )
+  logs = await cursor.to_list(length=limit)
+  for log in logs:
+    _serialize_id(log)
+  return {"logs": logs}

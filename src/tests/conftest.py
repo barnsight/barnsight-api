@@ -32,6 +32,7 @@ def mock_mongo_client():
           coll.update_one = AsyncMock(return_value=MagicMock(modified_count=1))
           coll.update_many = AsyncMock(return_value=MagicMock(modified_count=1))
           coll.delete_one = AsyncMock(return_value=MagicMock(deleted_count=1))
+          coll.delete_many = AsyncMock(return_value=MagicMock(deleted_count=1))
           coll.find_one_and_update = AsyncMock(return_value=None)
           coll.count_documents = AsyncMock(return_value=0)
           coll.create_index = AsyncMock(return_value="idx")

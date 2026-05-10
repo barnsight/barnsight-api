@@ -20,11 +20,14 @@ class EventBase(BaseModel):
   timestamp: datetime = Field(..., description="UTC timestamp of the detection")
   camera_id: str = Field(..., description="Identifier for the camera")
   device_id: str = Field(..., description="Identifier for the physical edge device")
+  detected_class: Optional[str] = Field(None, min_length=1, max_length=80)
   confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score of the detection")
   bounding_box: BoundingBox
   image_snapshot: Optional[str] = Field(None, description="Base64 encoded image snapshot")
   model_version: Optional[str] = None
   model_path: Optional[str] = None
+  inference_fps: Optional[float] = Field(None, ge=0)
+  edge_queue_size: Optional[int] = Field(None, ge=0)
   img_size: Optional[int] = Field(None, gt=0)
   threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
   event_id: Optional[str] = Field(None, min_length=1, max_length=128)
@@ -46,7 +49,16 @@ class EventCreate(EventBase):
       return value
 
     payload = value
-    if "," in payload and payload.lower().startswith("data:"):
+    lowered = payload.lower()
+    if lowered.startswith("data:"):
+      header = lowered.split(",", 1)[0]
+      allowed_headers = {
+        "data:image/jpeg;base64",
+        "data:image/png;base64",
+        "data:image/webp;base64",
+      }
+      if header not in allowed_headers:
+        raise ValueError("image_snapshot must be image/jpeg, image/png, or image/webp")
       payload = payload.split(",", 1)[1]
 
     try:

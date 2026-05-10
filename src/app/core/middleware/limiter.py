@@ -1,3 +1,5 @@
+import hashlib
+
 from api.dependencies import get_jwt_payload
 from core.config import settings
 from slowapi.util import get_remote_address
@@ -13,9 +15,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
       role, jti = payload.get("role"), payload.get("jti")
       request.state.limit_value = settings.RATE_LIMITS.get(role, settings.RATE_LIMIT_ANONYMOUS)
       request.state.identifier = f"{role}:{jti}"
-    elif api_key := request.headers.get("X-API-Key"):
+    elif api_key := request.headers.get("X-BarnSight-Key") or request.headers.get("X-API-Key"):
       request.state.limit_value = settings.RATE_LIMIT_EDGE
-      request.state.identifier = f"edge:{api_key}"
+      request.state.identifier = f"edge:{hashlib.sha256(api_key.encode()).hexdigest()}"
     else:
       request.state.limit_value = settings.RATE_LIMIT_ANONYMOUS
       request.state.identifier = f"anonymous:{get_remote_address(request)}"

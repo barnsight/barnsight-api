@@ -9,6 +9,7 @@ from core.database import MongoClient
 from core.schemas.devices import (
   CameraResponse,
   CameraStatusResponse,
+  CameraUpdate,
   DetectionZoneCreate,
   DetectionZoneResponse,
   DetectionZoneUpdate,
@@ -17,6 +18,21 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pymongo import ASCENDING, DESCENDING
 
 router = APIRouter(tags=["Cameras"])
+
+
+@router.get("", response_model=list[CameraResponse], dependencies=[Depends(limit_dependency)])
+async def list_cameras(
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  """List cameras scoped to the authenticated account."""
+  db = mongo.get_database("barnsight")
+  cursor = db["cameras"].find({"account_id": owner_id}).sort("camera_id", ASCENDING)
+  cameras = await cursor.to_list(length=None)
+  for camera in cameras:
+    _serialize_id(camera)
+    camera["online"] = await _camera_online(owner_id, camera["camera_id"])
+  return cameras
 
 
 @router.get(
@@ -37,6 +53,53 @@ async def get_camera(
   _serialize_id(camera)
   camera["online"] = await _camera_online(owner_id, camera_id)
   return camera
+
+
+@router.patch(
+  "/{camera_id}",
+  response_model=CameraResponse,
+  dependencies=[Depends(limit_dependency)],
+)
+async def update_camera(
+  camera_id: str,
+  camera: CameraUpdate,
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  update = camera.model_dump(exclude_none=True)
+  if not update:
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No updates supplied")
+  update["updated_at"] = _now()
+  result = await db["cameras"].update_one(
+    {"account_id": owner_id, "camera_id": camera_id}, {"$set": update}
+  )
+  if result.modified_count == 0:
+    existing = await db["cameras"].find_one({"account_id": owner_id, "camera_id": camera_id})
+    if not existing:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found")
+  saved = await db["cameras"].find_one({"account_id": owner_id, "camera_id": camera_id})
+  _serialize_id(saved)
+  saved["online"] = await _camera_online(owner_id, camera_id)
+  return saved
+
+
+@router.delete(
+  "/{camera_id}",
+  status_code=status.HTTP_204_NO_CONTENT,
+  dependencies=[Depends(limit_dependency)],
+)
+async def delete_camera(
+  camera_id: str,
+  owner_id: Annotated[str, Depends(get_device_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  result = await db["cameras"].delete_one({"account_id": owner_id, "camera_id": camera_id})
+  if result.deleted_count == 0:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Camera not found")
+  await db["detection_zones"].delete_many({"account_id": owner_id, "camera_id": camera_id})
+  return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(

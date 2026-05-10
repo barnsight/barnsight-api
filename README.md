@@ -119,18 +119,21 @@ curl -X POST http://localhost:8000/api/v1/events \
 
 ### Edge Event Contract
 
-BarnSight runs one edge worker/container per camera. Multiple camera workers on the same physical host share the same `device_id`; every stream has a unique `camera_id`. `POST /api/v1/events` accepts `X-API-Key` or JWT auth. Required fields are `timestamp`, `device_id`, `camera_id`, `confidence`, and `bounding_box`. Optional production edge metadata: `event_id`, `barn_id`, `zone_id`, `image_snapshot`, `model_version`, `model_path`, `img_size`, `threshold`, `snapshot_mode`, `edge_app_version`, and `queue_latency_seconds`.
+BarnSight runs one edge worker/container per camera. Multiple camera workers on the same physical host share the same `device_id`; every stream has a unique `camera_id`. Edge devices should submit to `/api/v1/edge/*` with `X-BarnSight-Key`. User-authenticated event writes can still use `POST /api/v1/events` with JWT auth.
+
+`POST /api/v1/edge/events` requires `timestamp`, `camera_id`, `confidence`, and `bounding_box`. `account_id`, `farm_id`, `barn_id`, and `device_id` are resolved from the API key when assigned. Optional production edge metadata: `event_id`, `detected_class`, `barn_id`, `device_id`, `zone_id`, `image_snapshot`, `model_version`, `model_path`, `inference_fps`, `edge_queue_size`, `img_size`, `threshold`, `snapshot_mode`, `edge_app_version`, and `queue_latency_seconds`.
 
 Validation rules:
 - `confidence` and `threshold` must be between `0.0` and `1.0`.
 - `bounding_box.width` and `bounding_box.height` must be positive.
 - `image_snapshot` must be valid base64 and decode under `EDGE_MAX_SNAPSHOT_BYTES`.
+- Data URI snapshots must be `image/jpeg`, `image/png`, or `image/webp`.
 - `event_id` is an account-scoped idempotency key; retries with the same `event_id` return the existing event.
 - Raw base64 snapshots are replaced with the Cloudinary URL after upload.
 
 ### Heartbeat Contract
 
-`POST /api/v1/devices/heartbeat` requires `X-API-Key` and stores the latest state in
+`POST /api/v1/edge/heartbeat` requires `X-BarnSight-Key` with `edge:heartbeat` and stores the latest state in
 `barnsight.devices` and `barnsight.cameras`. Redis stores `camera:{account_id}:{camera_id}:status` and `device:{account_id}:{device_id}:status` with `DEVICE_HEARTBEAT_TTL_SECONDS`.
 If a camera key expires, that camera is offline. A physical device is offline when none of its cameras have live heartbeat keys.
 
@@ -150,9 +153,12 @@ Device status endpoints:
 
 ### Device Config Contract
 
-Remote configuration is account scoped:
+Remote configuration is account scoped. Dashboard users manage config through:
 - `GET /api/v1/devices/{device_id}/config`
 - `PUT /api/v1/devices/{device_id}/config`
+
+Edge devices read assigned config through:
+- `GET /api/v1/edge/config`
 
 Fields: `enabled`, `inference_fps`, `img_size`, `min_confidence`, `cooldown_seconds`,
 `image_cooldown_seconds`, `region_overlap_threshold`, `jpeg_quality`,
@@ -183,12 +189,13 @@ Do not store RTSP credentials in this API. Store only redacted stream labels suc
 
 ### Security Expectations
 
-- Use `X-API-Key` for edge devices; API keys are hashed at rest.
+- Use `X-BarnSight-Key` for edge devices; API keys are hashed at rest and compared with constant-time checks.
 - Do not send API keys in query strings or logs.
 - Use HTTPS/TLS in production and rotate keys when devices are replaced.
 - Keep `EDGE_MAX_SNAPSHOT_BYTES` below the ingress/proxy body limit.
 - Use account scoping for every query and write.
 - Do not store raw base64 image payloads after Cloudinary upload.
+- Enforce RBAC with role permissions from `core.permissions`.
 
 ### Recommended Production Settings
 
@@ -207,27 +214,57 @@ Redis credentials, and Cloudinary credentials. Recommended edge-specific setting
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/auth/login` | Login with username/password |
-| `POST` | `/auth/token` | Refresh or revoke JWT |
+| `POST` | `/auth/refresh` | Refresh JWT |
 | `POST` | `/auth/logout` | Logout (blacklists JWT in Redis) |
 | `GET` | `/auth/google` | OAuth2 login via Google |
-| `GET` | `/user/me` | Get current user profile |
-| `PATCH` | `/user/me` | Update profile |
-| `PATCH` | `/user/me/password` | Change password |
-| `PATCH` | `/user/password` | Recover password |
-| `PATCH` | `/user/email` | Update email |
+| `POST` | `/auth/password/forgot` | Request password reset |
+| `POST` | `/auth/password/reset` | Reset password |
+| `POST` | `/auth/email/verify` | Verify email |
+| `GET` | `/me` | Get current user profile |
+| `PATCH` | `/me` | Update profile |
+| `PATCH` | `/me/password` | Change password |
+| `PATCH` | `/me/email` | Update email |
+| `GET` | `/me/sessions` | List sessions |
 | `POST` | `/api-keys` | Create API key for edge devices |
 | `GET` | `/api-keys` | List API keys |
 | `DELETE` | `/api-keys/{key_id}` | Revoke API key |
+| `POST` | `/api-keys/{key_id}/rotate` | Rotate API key and show the new raw key once |
+| `PATCH` | `/api-keys/{key_id}/scopes` | Update edge key scopes |
 
 ### Admin Endpoints (JWT + admin scope)
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/admin/setup` | Create initial admin account |
+| `POST` | `/admin` | Create initial admin account |
 | `POST` | `/farmers` | Register a new farmer account |
 | `POST` | `/staff` | Register a new staff account |
 | `GET` | `/admin/dashboard` | System-wide statistics |
+| `GET` | `/admin/system-health` | API, database, Redis, storage health |
+| `GET` | `/admin/users` | Platform user list |
+| `GET` | `/admin/audit-logs` | Audit log viewer |
+| `GET` | `/admin/metrics` | JSON operational metrics |
 | `PATCH` | `/admin/users/{username}/role` | Change user role |
+
+### Resource Endpoints
+
+The API exposes account-scoped CRUD for:
+
+- Farms: `/farms`
+- Barns: `/barns`, including `/barns/{barn_id}/summary`, `/devices`, `/cameras`, `/events`
+- Devices: `/devices`, `/devices/{device_id}/status`, `/config`, `/rotate-secret`, `/logs`
+- Cameras: `/cameras`, `/devices/{device_id}/cameras`, `/cameras/{camera_id}/detections`
+- Zones: `/zones` and `/cameras/{camera_id}/zones`
+- Events: `/events`, `/events/{event_id}/review`, `/status`, `/notes`, `/snapshot`
+- Analytics: `/analytics/overview`, `/events-over-time`, `/confidence`, `/barns`, `/cameras`, `/zones`, `/risk-score`, `/false-positive-rate`
+- Reports: `/reports`, `/reports/generate`, `/reports/custom`, `/reports/{report_id}/download`
+
+### Seed First Admin
+
+Set the seed variables in `.env` or your shell, then run:
+
+```bash
+BARNSIGHT_ADMIN_PASSWORD='change-me-now' uv run python scripts/seed_admin.py
+```
 
 ### Public Endpoints
 
@@ -274,7 +311,7 @@ All settings are loaded from `.env`. See `.env.example` for the full template.
 ```
 Edge Devices (barnsight-edge)
         │
-        │  POST /api/v1/events  (X-API-Key)
+        │  POST /api/v1/edge/*  (X-BarnSight-Key)
         ▼
     ┌─────────┐
     │  Nginx  │  Reverse proxy, TLS termination
@@ -306,6 +343,7 @@ Required production indexes include:
 - `devices`: `account_id + device_id` unique.
 - `cameras`: `account_id + camera_id` unique and `account_id + device_id`.
 - `detection_zones`: `account_id + camera_id + zone_id` unique.
+- `api_keys`: `key_hash` unique, plus `prefix`, `account_id + status`, and `farm_id + status`.
 
 ### Project Structure
 
@@ -316,6 +354,7 @@ src/app/
 │   ├── dependencies.py        # DB clients, auth, rate limiting
 │   ├── auth_dependencies.py   # API key validation for edge devices
 │   └── v1/routers/
+│       ├── edge.py            # X-BarnSight-Key edge ingestion
 │       ├── events.py          # Event ingestion and querying
 │       ├── analytics.py       # Aggregated detection insights
 │       ├── barns.py           # Barn/zone/device management
@@ -353,12 +392,58 @@ src/app/
 
 ---
 
+## Edge API Keys
+
+Admins and farmers create device API keys from the dashboard endpoints:
+
+- `GET /api/v1/api-keys`
+- `POST /api/v1/api-keys`
+- `DELETE /api/v1/api-keys/{key_id}`
+- `POST /api/v1/api-keys/{key_id}/rotate`
+- `PATCH /api/v1/api-keys/{key_id}/scopes`
+
+The API stores only `key_hash` and a visible `prefix`. The full `bs_live_...` key is returned only on creation or rotation. Edge clients send it with:
+
+```http
+X-BarnSight-Key: bs_live_xxxxxxxxxxxxxxxxx
+```
+
+Edge-only ingestion endpoints and scopes:
+
+- `POST /api/v1/edge/heartbeat` requires `edge:heartbeat`
+- `POST /api/v1/edge/events` requires `edge:event:create`
+- `POST /api/v1/edge/events/bulk` requires `edge:event:create`
+- `POST /api/v1/edge/snapshots` requires `edge:snapshot:upload`
+- `GET /api/v1/edge/config` requires `edge:device:config:read`
+- `POST /api/v1/edge/cameras/sync` requires `edge:camera:sync`
+
+Every edge request resolves `account_id`, `farm_id`, optional `barn_id`, and optional `device_id` from the API key. Revoked, expired, disabled, invalid, or under-scoped keys are rejected. Successful use updates `last_used_at` and `last_used_ip`, and key creation, revocation, rotation, scope updates, failed authentication, and event ingestion are written to audit logs.
+
+Example edge event upload:
+
+```json
+{
+  "camera_id": "camera-01",
+  "zone_id": "zone-floor-left",
+  "detected_class": "manure",
+  "confidence": 0.87,
+  "timestamp": "2026-04-11T06:20:00Z",
+  "bounding_box": { "x": 0.41, "y": 0.52, "width": 0.18, "height": 0.12 },
+  "model_version": "yolo-barnsight-v1",
+  "inference_fps": 5.2,
+  "edge_queue_size": 0,
+  "image_snapshot": "base64-or-upload-reference"
+}
+```
+
+---
+
 ## Farmer Workflow
 
 1. **Admin Creates Account**: An admin registers the farmer account via `/admin/register/farmer`.
 2. **Login**: Farmer logs in via username/password or Google OAuth.
 3. **Generate API Key**: Navigate to `/api-keys` to create a key for your barn's hardware.
-4. **Deploy Edge**: Insert the generated `bs_...` key into your **BarnSight Edge** configuration.
+4. **Deploy Edge**: Insert the generated `bs_live_...` key into your **BarnSight Edge** configuration.
 5. **Monitor**: View real-time manure detections and analytics reports.
 
 ---
@@ -387,8 +472,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 <div align="center">
 
 **Built for the future of farming.**
-
-</div>
-ing.**
 
 </div>

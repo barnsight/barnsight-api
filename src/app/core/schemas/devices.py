@@ -13,7 +13,7 @@ class DeviceHeartbeat(BaseModel):
   device_id: str = Field(..., min_length=1, max_length=128)
   camera_id: str = Field(..., min_length=1, max_length=128)
   barn_id: Optional[str] = Field(None, min_length=1, max_length=128)
-  status: Literal["online", "degraded", "offline", "error"] = "online"
+  status: Literal["online", "degraded", "offline", "error", "warning", "disabled"] = "online"
   edge_app_version: Optional[str] = None
   model_version: Optional[str] = None
   model_path: Optional[str] = None
@@ -40,7 +40,9 @@ class DeviceCreate(BaseModel):
   barn_id: str = Field(..., min_length=1, max_length=128)
   name: Optional[str] = Field(None, max_length=200)
   location: Optional[str] = Field(None, max_length=200)
-  status: Literal["online", "degraded", "offline", "error"] = "offline"
+  status: Literal[
+    "online", "offline", "warning", "disabled", "needs_setup", "degraded", "error"
+  ] = "offline"
 
 
 class DeviceUpdate(BaseModel):
@@ -49,7 +51,9 @@ class DeviceUpdate(BaseModel):
   barn_id: Optional[str] = Field(None, min_length=1, max_length=128)
   name: Optional[str] = Field(None, max_length=200)
   location: Optional[str] = Field(None, max_length=200)
-  status: Optional[Literal["online", "degraded", "offline", "error"]] = None
+  status: Optional[
+    Literal["online", "offline", "warning", "disabled", "needs_setup", "degraded", "error"]
+  ] = None
 
 
 class DeviceResponse(BaseModel):
@@ -76,7 +80,7 @@ class CameraCreate(BaseModel):
   barn_id: str = Field(..., min_length=1, max_length=128)
   name: Optional[str] = Field(None, max_length=200)
   stream_label: Optional[str] = Field(None, max_length=200)
-  status: Literal["online", "degraded", "offline", "error"] = "offline"
+  status: Literal["active", "inactive", "offline", "error", "online", "degraded"] = "offline"
 
 
 class CameraUpdate(BaseModel):
@@ -86,7 +90,7 @@ class CameraUpdate(BaseModel):
   barn_id: Optional[str] = Field(None, min_length=1, max_length=128)
   name: Optional[str] = Field(None, max_length=200)
   stream_label: Optional[str] = Field(None, max_length=200)
-  status: Optional[Literal["online", "degraded", "offline", "error"]] = None
+  status: Optional[Literal["active", "inactive", "offline", "error", "online", "degraded"]] = None
 
 
 class CameraResponse(BaseModel):

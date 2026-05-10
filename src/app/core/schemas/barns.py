@@ -22,7 +22,7 @@ class CameraResponse(CameraBase):
 
 
 class ZoneBase(BaseModel):
-  zone_id: int
+  zone_id: int | str
   name: str
 
 
@@ -39,7 +39,7 @@ class ZoneResponse(ZoneWithCameras):
 
 
 class BarnBase(BaseModel):
-  barn_id: int
+  barn_id: int | str
   name: str
 
 
@@ -66,9 +66,9 @@ class DetectionItem(BaseModel):
 
 
 class DetectionEvent(BaseModel):
-  id: int
+  id: int | str
   timestamp: datetime
-  zone_id: int
+  zone_id: int | str
   device_id: str
   detections: List[DetectionItem]
 

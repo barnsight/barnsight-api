@@ -29,7 +29,21 @@ async def lifespan(app: FastAPI):
   init_cloudinary()
   if MongoClient._client:
     db = MongoClient._client.get_database("barnsight")
+    users_db = MongoClient._client.get_database("users")
+    await users_db["api_keys"].create_index([("prefix", ASCENDING)])
+    await users_db["api_keys"].create_index(
+      [("key_hash", ASCENDING)],
+      unique=True,
+      partialFilterExpression={"key_hash": {"$exists": True, "$type": "string"}},
+    )
+    await users_db["api_keys"].create_index([("account_id", ASCENDING), ("status", ASCENDING)])
+    await users_db["api_keys"].create_index([("farm_id", ASCENDING), ("status", ASCENDING)])
+    await users_db["audit_logs"].create_index([("created_at", ASCENDING)])
     await EventCRUD(db).setup_indexes()
+    await db["farms"].create_index([("account_id", ASCENDING), ("farm_id", ASCENDING)], unique=True)
+    await db["barns"].create_index([("account_id", ASCENDING), ("barn_id", ASCENDING)], unique=True)
+    await db["reports"].create_index([("account_id", ASCENDING), ("created_at", ASCENDING)])
+    await db["audit_logs"].create_index([("created_at", ASCENDING)])
     await db["devices"].create_index(
       [("account_id", ASCENDING), ("device_id", ASCENDING)], unique=True
     )

@@ -7,6 +7,7 @@ All endpoints require admin scope except /setup.
 from typing import Annotated
 
 from api.dependencies import get_current_user, get_mongo_client, limit_dependency
+from core.config import settings
 from core.database import MongoClient
 from core.schemas.admin import AdminCreate
 from crud import UserCRUD
@@ -58,6 +59,85 @@ async def admin_dashboard(
     "events": {
       "total": await barnsight_db["events"].count_documents({}),
     },
+  }
+
+
+@router.get(
+  "/system-health",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
+async def admin_system_health(mongo: Annotated[MongoClient, Depends(get_mongo_client)]):
+  users_db = mongo.get_database("users")
+  barnsight_db = mongo.get_database("barnsight")
+  return {
+    "api": "ok",
+    "database": "ok",
+    "redis": "ok",
+    "storage": "configured"
+    if settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY
+    else "not_configured",
+    "users": await users_db["admins"].count_documents({})
+    + await users_db["farmers"].count_documents({})
+    + await users_db["staff"].count_documents({}),
+    "events": await barnsight_db["events"].count_documents({}),
+  }
+
+
+@router.get(
+  "/users",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
+async def admin_users(mongo: Annotated[MongoClient, Depends(get_mongo_client)]):
+  users_db = mongo.get_database("users")
+  users = []
+  for collection in ["admins", "farmers", "staff", "super_admin"]:
+    cursor = users_db[collection].find({})
+    docs = await cursor.to_list(length=None)
+    for doc in docs:
+      doc["_id"] = str(doc["_id"])
+      doc.pop("password", None)
+      users.append(doc)
+  return {"users": users}
+
+
+@router.get(
+  "/audit-logs",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
+async def audit_logs(
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+  limit: int = 100,
+):
+  logs = []
+  for db_name in ["users", "barnsight"]:
+    db = mongo.get_database(db_name)
+    cursor = db["audit_logs"].find({}).sort("created_at", -1).limit(limit)
+    docs = await cursor.to_list(length=limit)
+    for doc in docs:
+      doc["_id"] = str(doc["_id"])
+      doc["database"] = db_name
+      logs.append(doc)
+  logs.sort(key=lambda item: item.get("created_at"), reverse=True)
+  return {"audit_logs": logs[:limit]}
+
+
+@router.get(
+  "/metrics",
+  status_code=status.HTTP_200_OK,
+  dependencies=[Security(get_current_user, scopes=["admin"]), Depends(limit_dependency)],
+)
+async def admin_metrics(mongo: Annotated[MongoClient, Depends(get_mongo_client)]):
+  users_db = mongo.get_database("users")
+  barnsight_db = mongo.get_database("barnsight")
+  return {
+    "accounts": await barnsight_db["farms"].count_documents({}),
+    "api_keys": await users_db["api_keys"].count_documents({}),
+    "devices": await barnsight_db["devices"].count_documents({}),
+    "cameras": await barnsight_db["cameras"].count_documents({}),
+    "events": await barnsight_db["events"].count_documents({}),
   }
 
 

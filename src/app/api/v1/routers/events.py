@@ -10,9 +10,17 @@ from typing import Annotated, Optional
 
 from api.auth_dependencies import validate_api_key
 from api.dependencies import get_jwt_payload, get_mongo_client, get_redis_client, limit_dependency
+from bson import ObjectId
 from core.config import settings
 from core.database import MongoClient, RedisClient
 from core.schemas.events import EventCreate, EventListResponse, EventResponse
+from core.schemas.platform import (
+  EventNoteCreate,
+  EventReviewUpdate,
+  EventStatusUpdate,
+  GenericPatch,
+)
+from core.services.audit_service import write_audit_log
 from core.services.cloudinary_service import upload_base64_image
 from crud.event_crud import EventCRUD
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -132,3 +140,163 @@ async def get_events(
   )
 
   return {"events": events, "total": total, "next_cursor": next_cursor}
+
+
+def _event_lookup(owner_id: str, event_id: str) -> dict:
+  lookup: dict = {"account_id": owner_id}
+  try:
+    lookup["_id"] = ObjectId(event_id)
+  except Exception:
+    lookup["event_id"] = event_id
+  return lookup
+
+
+@router.get(
+  "/{event_id}",
+  status_code=status.HTTP_200_OK,
+  response_model=EventResponse,
+  dependencies=[Depends(limit_dependency)],
+)
+async def get_event(
+  event_id: str,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  event = await db["events"].find_one(_event_lookup(owner_id, event_id))
+  if not event:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  event["_id"] = str(event["_id"])
+  return event
+
+
+@router.patch("/{event_id}", dependencies=[Depends(limit_dependency)])
+async def update_event(
+  event_id: str,
+  update: GenericPatch,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  data = update.model_dump(exclude_unset=True)
+  data.pop("account_id", None)
+  data.pop("farm_id", None)
+  data.pop("device_id", None)
+  if not data:
+    return {"message": "No fields to update."}
+  result = await db["events"].update_one(_event_lookup(owner_id, event_id), {"$set": data})
+  if result.modified_count == 0:
+    existing = await db["events"].find_one(_event_lookup(owner_id, event_id))
+    if not existing:
+      raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  saved = await db["events"].find_one(_event_lookup(owner_id, event_id))
+  saved["_id"] = str(saved["_id"])
+  return saved
+
+
+@router.delete(
+  "/{event_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(limit_dependency)]
+)
+async def delete_event(
+  event_id: str,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  result = await db["events"].delete_one(_event_lookup(owner_id, event_id))
+  if result.deleted_count == 0:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  return
+
+
+@router.patch("/{event_id}/review", dependencies=[Depends(limit_dependency)])
+async def review_event(
+  event_id: str,
+  review: EventReviewUpdate,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  event = await db["events"].find_one(_event_lookup(owner_id, event_id))
+  if not event:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  review_doc = {
+    "event_id": str(event["_id"]),
+    "account_id": owner_id,
+    "status": review.status,
+    "note": review.note,
+    "reviewed_at": datetime.utcnow(),
+  }
+  await db["event_reviews"].insert_one(review_doc)
+  await db["events"].update_one({"_id": event["_id"]}, {"$set": {"status": review.status}})
+  await write_audit_log(
+    db,
+    action="event.reviewed",
+    account_id=owner_id,
+    resource_type="event",
+    resource_id=str(event["_id"]),
+    metadata={"status": review.status},
+  )
+  return {"message": "Event reviewed.", "status": review.status}
+
+
+@router.patch("/{event_id}/status", dependencies=[Depends(limit_dependency)])
+async def update_event_status(
+  event_id: str,
+  body: EventStatusUpdate,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  event = await db["events"].find_one(_event_lookup(owner_id, event_id))
+  if not event:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  await db["events"].update_one({"_id": event["_id"]}, {"$set": {"status": body.status}})
+  await write_audit_log(
+    db,
+    action="event.status_changed",
+    account_id=owner_id,
+    resource_type="event",
+    resource_id=str(event["_id"]),
+    metadata={"status": body.status},
+  )
+  return {"message": "Event status updated.", "status": body.status}
+
+
+@router.post(
+  "/{event_id}/notes",
+  status_code=status.HTTP_201_CREATED,
+  dependencies=[Depends(limit_dependency)],
+)
+async def add_event_note(
+  event_id: str,
+  body: EventNoteCreate,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  event = await db["events"].find_one(_event_lookup(owner_id, event_id))
+  if not event:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  note = {
+    "event_id": str(event["_id"]),
+    "account_id": owner_id,
+    "note": body.note,
+    "created_at": datetime.utcnow(),
+  }
+  result = await db["event_notes"].insert_one(note)
+  note["_id"] = str(result.inserted_id)
+  return note
+
+
+@router.get("/{event_id}/snapshot", dependencies=[Depends(limit_dependency)])
+async def get_event_snapshot(
+  event_id: str,
+  owner_id: Annotated[str, Depends(get_event_owner)],
+  mongo: Annotated[MongoClient, Depends(get_mongo_client)],
+):
+  db = mongo.get_database("barnsight")
+  event = await db["events"].find_one(_event_lookup(owner_id, event_id))
+  if not event:
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+  return {"snapshot": event.get("image_snapshot"), "event_id": str(event["_id"])}
