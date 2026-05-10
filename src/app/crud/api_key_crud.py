@@ -16,6 +16,13 @@ class ApiKeyCRUD(BaseCRUD):
   def __init__(self, db: AsyncDatabase):
     super().__init__(db)
     self.collection_name = "api_keys"
+    self.default_edge_scopes = [
+      "edge:heartbeat",
+      "edge:event:create",
+      "edge:snapshot:upload",
+      "edge:camera:sync",
+      "edge:device:config:read",
+    ]
 
   def _generate_key(self) -> str:
     """Generates a secure random API key."""
@@ -31,6 +38,38 @@ class ApiKeyCRUD(BaseCRUD):
   def _serialize(self, doc: dict) -> dict:
     doc["_id"] = str(doc["_id"])
     return doc
+
+  def _response_doc(self, doc: dict, owner_id: str | None = None) -> dict:
+    """Return a safe API response shape for current and legacy key documents."""
+    key_id = str(doc["_id"])
+    account_id = doc.get("account_id") or doc.get("owner_id") or owner_id
+    farm_id = doc.get("farm_id") or account_id
+    created_at = doc.get("created_at")
+    if created_at is None and hasattr(doc.get("_id"), "generation_time"):
+      created_at = doc["_id"].generation_time
+    if created_at is None:
+      created_at = datetime.now(timezone.utc)
+    status = doc.get("status")
+    if status not in {"active", "revoked", "expired"}:
+      status = "active"
+
+    return {
+      "_id": key_id,
+      "name": doc.get("name") or "Legacy API Key",
+      "prefix": doc.get("prefix") or doc.get("key_prefix") or f"legacy_{key_id[-8:]}",
+      "account_id": account_id,
+      "farm_id": farm_id,
+      "barn_id": doc.get("barn_id"),
+      "device_id": doc.get("device_id"),
+      "scopes": doc.get("scopes") or self.default_edge_scopes,
+      "status": status,
+      "created_by_user_id": doc.get("created_by_user_id"),
+      "created_at": created_at,
+      "expires_at": doc.get("expires_at"),
+      "last_used_at": doc.get("last_used_at") or doc.get("last_used"),
+      "last_used_ip": doc.get("last_used_ip"),
+      "revoked_at": doc.get("revoked_at"),
+    }
 
   def _object_id(self, key_id: str) -> ObjectId:
     try:
@@ -81,7 +120,7 @@ class ApiKeyCRUD(BaseCRUD):
       "api_key.created",
       {"api_key_id": str(result.inserted_id), "account_id": account_id, "prefix": doc["prefix"]},
     )
-    response_doc = self._serialize(response_doc)
+    response_doc = self._response_doc(response_doc, owner_id=owner_id)
     response_doc["key"] = raw_key  # Include raw key only for the response
     return response_doc
 
@@ -91,9 +130,7 @@ class ApiKeyCRUD(BaseCRUD):
       {"$or": [{"owner_id": owner_id}, {"account_id": owner_id}, {"farm_id": owner_id}]}
     )
     keys = await cursor.to_list(length=100)
-    for k in keys:
-      self._serialize(k)
-    return keys
+    return [self._response_doc(k, owner_id=owner_id) for k in keys]
 
   async def validate_key(
     self, raw_key: str, required_scope: str | None = None, ip: str | None = None
@@ -174,7 +211,7 @@ class ApiKeyCRUD(BaseCRUD):
       "api_key.rotated",
       {"api_key_id": key_id, "account_id": existing.get("account_id"), "prefix": update["prefix"]},
     )
-    existing = self._serialize(existing)
+    existing = self._response_doc(existing, owner_id=owner_id)
     existing["key"] = raw_key
     return existing
 
@@ -193,4 +230,4 @@ class ApiKeyCRUD(BaseCRUD):
       "api_key.scopes_updated",
       {"api_key_id": key_id, "account_id": doc.get("account_id"), "scopes": scopes},
     )
-    return self._serialize(doc)
+    return self._response_doc(doc, owner_id=owner_id)

@@ -58,6 +58,37 @@ def test_api_key_create_returns_raw_key_once(authorized_client, mock_mongo_clien
   assert inserted["key_hash"]
   assert "key" not in inserted
   assert inserted["device_id"] == "edge_001"
+  assert "key_hash" not in data
+
+
+def test_api_key_list_normalizes_legacy_key_docs(authorized_client, mock_mongo_client):
+  users_db = mock_mongo_client.get_database("users")
+  cursor = MagicMock()
+  cursor.to_list = AsyncMock(
+    return_value=[
+      {
+        "_id": "69d69edc7d8650fb0520a5ea",
+        "owner_id": "admin",
+        "name": "BarnSight01",
+        "hashed_key": "d09b6008aa980080362c65fd7ec3a7f52bbd07595c7adee3ea43bb6e47328e6e",
+        "created_at": datetime(2026, 4, 8, 18, 30, 52, tzinfo=timezone.utc),
+        "last_used": None,
+      }
+    ]
+  )
+  users_db["api_keys"].find.return_value = cursor
+
+  response = authorized_client.get("/api/v1/api-keys")
+
+  assert response.status_code == 200
+  data = response.json()
+  assert data[0]["_id"] == "69d69edc7d8650fb0520a5ea"
+  assert data[0]["account_id"] == "admin"
+  assert data[0]["farm_id"] == "admin"
+  assert data[0]["prefix"] == "legacy_0520a5ea"
+  assert data[0]["status"] == "active"
+  assert data[0]["scopes"]
+  assert "hashed_key" not in data[0]
 
 
 @pytest.mark.asyncio
