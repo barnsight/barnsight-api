@@ -109,6 +109,28 @@ async def test_validate_key_uses_hash_and_scope(mock_mongo_client):
   users_db["api_keys"].update_one.assert_called_once()
 
 
+@pytest.mark.asyncio
+async def test_validate_key_accepts_legacy_prefix_and_trimmed_key(mock_mongo_client):
+  raw_key = "bs_live_test_secret"
+  users_db = mock_mongo_client.get_database("users")
+  cursor = MagicMock()
+  legacy_doc = _edge_key_doc(raw_key, ["edge:event:create"])
+  legacy_doc["key_prefix"] = legacy_doc.pop("prefix")
+  legacy_doc["hashed_key"] = legacy_doc.pop("key_hash")
+  cursor.to_list = AsyncMock(return_value=[legacy_doc])
+  users_db["api_keys"].find.return_value = cursor
+
+  key_doc = await ApiKeyCRUD(users_db).validate_key(
+    f"  {raw_key}\n", required_scope="edge:event:create", ip="127.0.0.1"
+  )
+
+  assert key_doc is not None
+  assert key_doc["account_id"] == "acc_123"
+  users_db["api_keys"].find.assert_called_once_with(
+    {"$or": [{"prefix": raw_key[:16]}, {"key_prefix": raw_key[:16]}]}
+  )
+
+
 def test_edge_event_uses_key_scope_and_associations(client, mock_mongo_client):
   raw_key = "bs_live_edge_secret"
   users_db = mock_mongo_client.get_database("users")

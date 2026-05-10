@@ -136,9 +136,18 @@ class ApiKeyCRUD(BaseCRUD):
     self, raw_key: str, required_scope: str | None = None, ip: str | None = None
   ) -> Optional[dict]:
     """Validates a raw API key and returns the key document if valid."""
+    raw_key = raw_key.strip()
+    if not raw_key:
+      await self._audit(
+        "api_key.authentication_failed", {"prefix": "", "reason": "empty", "ip": ip}
+      )
+      return None
+
     key_hash = self._hash_key(raw_key)
     prefix = self._prefix(raw_key)
-    cursor = self.db[self.collection_name].find({"prefix": prefix})
+    cursor = self.db[self.collection_name].find(
+      {"$or": [{"prefix": prefix}, {"key_prefix": prefix}]}
+    )
     candidates = await cursor.to_list(length=25)
     now = datetime.now(timezone.utc)
 
