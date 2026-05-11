@@ -98,6 +98,7 @@ async def test_validate_key_uses_hash_and_scope(mock_mongo_client):
   cursor = MagicMock()
   cursor.to_list = AsyncMock(return_value=[_edge_key_doc(raw_key, ["edge:event:create"])])
   users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(return_value=None)
 
   key_doc = await ApiKeyCRUD(users_db).validate_key(
     raw_key, required_scope="edge:event:create", ip="127.0.0.1"
@@ -119,6 +120,7 @@ async def test_validate_key_accepts_legacy_prefix_and_trimmed_key(mock_mongo_cli
   legacy_doc["hashed_key"] = legacy_doc.pop("key_hash")
   cursor.to_list = AsyncMock(return_value=[legacy_doc])
   users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(return_value=None)
 
   key_doc = await ApiKeyCRUD(users_db).validate_key(
     f"  {raw_key}\n", required_scope="edge:event:create", ip="127.0.0.1"
@@ -132,6 +134,46 @@ async def test_validate_key_accepts_legacy_prefix_and_trimmed_key(mock_mongo_cli
 
 
 @pytest.mark.asyncio
+async def test_validate_key_accepts_bearer_prefix(mock_mongo_client):
+  raw_key = "bs_live_test_secret"
+  users_db = mock_mongo_client.get_database("users")
+  cursor = MagicMock()
+  cursor.to_list = AsyncMock(return_value=[_edge_key_doc(raw_key, ["edge:event:create"])])
+  users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(return_value=None)
+
+  key_doc = await ApiKeyCRUD(users_db).validate_key(
+    f"Bearer {raw_key}", required_scope="edge:event:create", ip="127.0.0.1"
+  )
+
+  assert key_doc is not None
+  assert key_doc["account_id"] == "acc_123"
+
+
+@pytest.mark.asyncio
+async def test_validate_key_falls_back_to_hash_lookup_without_prefix(mock_mongo_client):
+  raw_key = "bs_live_test_secret"
+  users_db = mock_mongo_client.get_database("users")
+  cursor = MagicMock()
+  cursor.to_list = AsyncMock(return_value=[])
+  users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(
+    return_value={
+      **_edge_key_doc(raw_key, ["edge:event:create"]),
+      "prefix": None,
+    }
+  )
+
+  key_doc = await ApiKeyCRUD(users_db).validate_key(
+    raw_key, required_scope="edge:event:create", ip="127.0.0.1"
+  )
+
+  assert key_doc is not None
+  assert key_doc["account_id"] == "acc_123"
+  users_db["api_keys"].find_one.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_validate_key_defaults_legacy_scopes_for_edge_devices(mock_mongo_client):
   raw_key = "bs_live_test_secret"
   users_db = mock_mongo_client.get_database("users")
@@ -140,6 +182,7 @@ async def test_validate_key_defaults_legacy_scopes_for_edge_devices(mock_mongo_c
   legacy_doc.pop("scopes")
   cursor.to_list = AsyncMock(return_value=[legacy_doc])
   users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(return_value=None)
 
   key_doc = await ApiKeyCRUD(users_db).validate_key(
     raw_key, required_scope="edge:event:create", ip="127.0.0.1"
@@ -156,6 +199,7 @@ def test_edge_event_uses_key_scope_and_associations(client, mock_mongo_client):
   cursor = MagicMock()
   cursor.to_list = AsyncMock(return_value=[_edge_key_doc(raw_key)])
   users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(return_value=None)
 
   db = mock_mongo_client.get_database("barnsight")
   db["cameras"].find_one = AsyncMock(
@@ -208,6 +252,7 @@ def test_edge_event_rejects_missing_scope(client, mock_mongo_client):
   cursor = MagicMock()
   cursor.to_list = AsyncMock(return_value=[_edge_key_doc(raw_key, ["edge:heartbeat"])])
   users_db["api_keys"].find.return_value = cursor
+  users_db["api_keys"].find_one = AsyncMock(return_value=None)
 
   response = client.post(
     "/api/v1/edge/events",

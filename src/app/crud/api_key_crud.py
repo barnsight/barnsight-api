@@ -35,6 +35,12 @@ class ApiKeyCRUD(BaseCRUD):
   def _prefix(self, raw_key: str) -> str:
     return raw_key[:16]
 
+  def _normalize_raw_key(self, raw_key: str) -> str:
+    normalized = raw_key.strip()
+    if normalized.lower().startswith("bearer "):
+      normalized = normalized[7:].strip()
+    return normalized
+
   def _serialize(self, doc: dict) -> dict:
     doc["_id"] = str(doc["_id"])
     return doc
@@ -142,7 +148,7 @@ class ApiKeyCRUD(BaseCRUD):
     self, raw_key: str, required_scope: str | None = None, ip: str | None = None
   ) -> Optional[dict]:
     """Validates a raw API key and returns the key document if valid."""
-    raw_key = raw_key.strip()
+    raw_key = self._normalize_raw_key(raw_key)
     if not raw_key:
       await self._audit(
         "api_key.authentication_failed", {"prefix": "", "reason": "empty", "ip": ip}
@@ -151,10 +157,21 @@ class ApiKeyCRUD(BaseCRUD):
 
     key_hash = self._hash_key(raw_key)
     prefix = self._prefix(raw_key)
-    cursor = self.db[self.collection_name].find(
+    candidates_by_id: dict[object, dict] = {}
+
+    prefix_cursor = self.db[self.collection_name].find(
       {"$or": [{"prefix": prefix}, {"key_prefix": prefix}]}
     )
-    candidates = await cursor.to_list(length=25)
+    for key_doc in await prefix_cursor.to_list(length=25):
+      candidates_by_id[key_doc["_id"]] = key_doc
+
+    exact_hash_match = await self.db[self.collection_name].find_one(
+      {"$or": [{"key_hash": key_hash}, {"hashed_key": key_hash}]}
+    )
+    if exact_hash_match:
+      candidates_by_id[exact_hash_match["_id"]] = exact_hash_match
+
+    candidates = list(candidates_by_id.values())
     now = datetime.now(timezone.utc)
 
     for key_doc in candidates:
